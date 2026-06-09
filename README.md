@@ -1,3 +1,34 @@
+# Note de Sharaine
+
+J'ai rajouté une voiture bleu avec le follow_the_gap de Amaury
+
+### Changer les perfs
+
+Dans le fichier worlds/Piste_CoVAPSy_2025a.wbt il faut changer 
+
+```
+WorldInfo {
+  basicTimeStep 8 # en ms je crois et plus c'est petit plus la simu est bien (par defaut 32)
+  FPS 30 #mettre a 60 si les perf sont bonne
+}
+```
+
+### Changer le controller des voitures 
+
+Dans le fichier worlds/Piste_CoVAPSy_2025a.wbt (à la toute fin) il faut changer 
+
+```
+TT02_2025a {
+  translation -1 -2 0.04
+  name "blue_car"
+  # controller "controller_blue"
+  controller "<extern>"
+  color 0 0 0.9
+}
+```
+
+README de Sylvain en-bas:
+
 # rosconfr
 
 `rosconfr` is a ROS 2 package for running a Webots-based Ackermann vehicle simulation built around the `yellow_car` robot. This package will be used during the Hackathon organized for the ROSCon FR 2026 in Paris, and derived from [the package](https://github.com/ajuton-ens/CourseVoituresAutonomesSaclay/tree/main/Simulator) used during the [CoVAPSy challenge](https://ajuton-ens.github.io/CourseVoituresAutonomesSaclay/).
@@ -48,7 +79,7 @@ These topics are available in both launch files.
 |---|---|---|---|---|
 | `/yellow_car/cmd_ackermann` | `ackermann_msgs/msg/AckermannDrive` | subscribed | `yellow_driver` | Main control input for the simulated vehicle. |
 | `/yellow_car/scan` | `sensor_msgs/msg/LaserScan` | published | `webots_bridge` | Lidar output from the `RpLidarA2` device. |
-| `/joint_states` | `sensor_msgs/msg/JointState` | published | `yellow_driver` | Steering and wheel rotation states measured from the simulated vehicle joints. |
+| `/yellow_car/joint_states` | `sensor_msgs/msg/JointState` | published | `yellow_driver` | Steering and wheel rotation states measured from the simulated vehicle joints. |
 | `/yellow_car/current_speed` | `std_msgs/msg/Float32` | published | `yellow_driver` | Current vehicle speed measured by Webots and converted to m/s. |
 | `/tf` | `tf2_msgs/msg/TFMessage` | published | `robot_state_publisher` | Dynamic transforms for the robot model. |
 | `/tf_static` | `tf2_msgs/msg/TFMessage` | published | `robot_state_publisher` | Static transforms from the robot URDF. |
@@ -64,6 +95,6 @@ These topics are only available in the camera-enabled launch file.
 
 ## Notes
 
-- `yellow_driver` now reads Webots position sensors to publish `/joint_states`, and reads `getCurrentSpeed()` to publish `/yellow_car/current_speed` in m/s.
+- `yellow_driver` now reads Webots position sensors to publish `/yellow_car/joint_states`, and reads `getCurrentSpeed()` to publish `/yellow_car/current_speed` in m/s.
 - Steering is derived from the `AckermannDrive.steering_angle` field and mirrored to both front steering joints.
 - The camera is only declared in `resource/TT02_jaune_cam.urdf`, so it is only exposed by the camera launch file.
