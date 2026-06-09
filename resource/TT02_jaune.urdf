@@ -1,0 +1,158 @@
+<?xml version="1.0"?>
+<robot name="yellow_car">
+    <webots>
+        <plugin type="rosconfr.yellow_driver.YellowDriver" />
+        <device reference="RpLidarA2" type="Lidar">
+            <ros>
+                <topicName>/yellow_car/scan</topicName>
+                <frameName>laser_link</frameName>
+                <alwaysOn>true</alwaysOn>
+            </ros>
+        </device>
+        <device reference="accelerometer" type="Accelerometer">
+            <ros>
+                <topicName>/yellow_car/imu/acceleration</topicName>
+                <frameName>base_link</frameName>
+                <alwaysOn>true</alwaysOn>
+            </ros>
+        </device>
+    </webots>
+
+    <link name="base_link">
+        <visual>
+            <origin xyz="0.127 0 -0.02" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="package://rosconfr/protos/ChevroletCamaroLight.stl"/>
+            </geometry>
+            <material name="yellow">
+                <color rgba="0.69 0.70 0.20 1.0"/>
+            </material>
+        </visual>
+    </link>
+
+    <link name="laser_link">
+        <visual>
+            <origin xyz="0 0 -0.031" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/devices/slamtec/protos/meshes/rplidar_bottom.obj"/>
+            </geometry>
+            <material name="black">
+                <color rgba="0.11 0.11 0.11 1.0"/>
+            </material>
+        </visual>
+        <visual>
+            <origin xyz="0 0 -0.0314" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/devices/slamtec/protos/meshes/rplidar_top.obj"/>
+            </geometry>
+            <material name="black_top">
+                <color rgba="0.02 0.02 0.02 1.0"/>
+            </material>
+        </visual>
+        <visual>
+            <origin xyz="0 0 -0.012" rpy="0 0 0"/>
+            <geometry>
+                <cylinder radius="0.037" length="0.005"/>
+            </geometry>
+            <material name="dark_grey">
+                <color rgba="0.11 0.11 0.11 1.0"/>
+            </material>
+        </visual>
+    </link>
+
+    <joint name="laser_joint" type="fixed">
+        <parent link="base_link"/>
+        <child link="laser_link"/>
+        <origin xyz="0.21 0 0.079" rpy="0 0 0"/>
+    </joint>
+
+    <link name="front_left_steering_link"/>
+    <joint name="front_left_steering_joint" type="revolute">
+        <parent link="base_link"/>
+        <child link="front_left_steering_link"/>
+        <origin xyz="0.257 0.075 0.0" rpy="0 0 0"/>
+        <axis xyz="0 0 1"/>
+        <limit lower="-0.35" upper="0.35" effort="1.0" velocity="5.0"/>
+    </joint>
+
+    <link name="front_right_steering_link"/>
+    <joint name="front_right_steering_joint" type="revolute">
+        <parent link="base_link"/>
+        <child link="front_right_steering_link"/>
+        <origin xyz="0.257 -0.075 0.0" rpy="0 0 0"/>
+        <axis xyz="0 0 1"/>
+        <limit lower="-0.35" upper="0.35" effort="1.0" velocity="5.0"/>
+    </joint>
+
+    <link name="front_left_wheel_link">
+        <visual>
+            <origin xyz="0 0 0" rpy="1.57079632679 0 0"/>
+            <geometry>
+                <cylinder radius="0.04" length="0.035"/>
+            </geometry>
+            <material name="wheel_black">
+                <color rgba="0.05 0.05 0.05 1.0"/>
+            </material>
+        </visual>
+    </link>
+    <joint name="front_left_wheel_joint" type="continuous">
+        <parent link="front_left_steering_link"/>
+        <child link="front_left_wheel_link"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <axis xyz="0 1 0"/>
+    </joint>
+
+    <link name="front_right_wheel_link">
+        <visual>
+            <origin xyz="0 0 0" rpy="1.57079632679 0 0"/>
+            <geometry>
+                <cylinder radius="0.04" length="0.035"/>
+            </geometry>
+            <material name="wheel_black_right">
+                <color rgba="0.05 0.05 0.05 1.0"/>
+            </material>
+        </visual>
+    </link>
+    <joint name="front_right_wheel_joint" type="continuous">
+        <parent link="front_right_steering_link"/>
+        <child link="front_right_wheel_link"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <axis xyz="0 1 0"/>
+    </joint>
+
+    <link name="rear_left_wheel_link">
+        <visual>
+            <origin xyz="0 0 0" rpy="1.57079632679 0 0"/>
+            <geometry>
+                <cylinder radius="0.04" length="0.035"/>
+            </geometry>
+            <material name="wheel_black_rear_left">
+                <color rgba="0.05 0.05 0.05 1.0"/>
+            </material>
+        </visual>
+    </link>
+    <joint name="rear_left_wheel_joint" type="continuous">
+        <parent link="base_link"/>
+        <child link="rear_left_wheel_link"/>
+        <origin xyz="0 0.075 0.0" rpy="0 0 0"/>
+        <axis xyz="0 1 0"/>
+    </joint>
+
+    <link name="rear_right_wheel_link">
+        <visual>
+            <origin xyz="0 0 0" rpy="1.57079632679 0 0"/>
+            <geometry>
+                <cylinder radius="0.04" length="0.035"/>
+            </geometry>
+            <material name="wheel_black_rear_right">
+                <color rgba="0.05 0.05 0.05 1.0"/>
+            </material>
+        </visual>
+    </link>
+    <joint name="rear_right_wheel_joint" type="continuous">
+        <parent link="base_link"/>
+        <child link="rear_right_wheel_link"/>
+        <origin xyz="0 -0.075 0.0" rpy="0 0 0"/>
+        <axis xyz="0 1 0"/>
+    </joint>
+</robot>
