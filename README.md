@@ -21,10 +21,21 @@ Dans le fichier worlds/Piste_CoVAPSy_2025a.wbt (à la toute fin) il faut changer
 TT02_2025a {
   translation -1 -2 0.04
   name "blue_car"
-  # controller "controller_blue"
-  controller "<extern>"
+  # controller "controller_blue" #controller webot
+  controller "<extern>" #ros2
   color 0 0 0.9
 }
+```
+
+### Truc à lancer
+
+```bash
+ros2 run joy joy_node
+ros2 run rosconfr ps4_teleop_ackermann
+
+ros2 run rosconfr follow_gap_blue
+
+ros2 launch rosconfr webots_rosconfr.launch.py
 ```
 
 README de Sylvain en-bas:
