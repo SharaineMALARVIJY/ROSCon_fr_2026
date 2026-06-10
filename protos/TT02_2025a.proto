@@ -213,6 +213,19 @@ PROTO TT02_2025a [
           }
         ]
       }
+      Gyro {
+        name "gyro"
+      }
+      InertialUnit {
+        name "inertial_unit"
+      }
+      DistanceSensor {
+        name "sonar_back"
+        translation -0.2 0 0.05  # Derrière la voiture (axe x négatif)
+        rotation 0 1 0 3.1416    # Rotation de 180° autour de l’axe Y
+        type "sonar"
+        lookupTable [0 1023 0, 1 0 0]
+      }
     ]
     boundingObject Group {
       children [

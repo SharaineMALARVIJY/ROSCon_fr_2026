@@ -35,7 +35,8 @@ data_files.append(('share/' + package_name + '/resource',
                   ['resource/TT02_bleu.urdf']))
 data_files.append(('share/' + package_name + '/controllers/controller_blue',
                    ['controllers/controller_blue/controller_blue.py']))
-
+data_files.append(('share/' + package_name + '/launch',
+                  ['launch/blue_mapping_base.launch.py']))
 
 setup(
     name=package_name,
@@ -58,6 +59,7 @@ setup(
             'teleop_ackermann = rosconfr.teleop_ackermann:main',
             'ps4_teleop_ackermann = rosconfr.ps4_teleop_ackermann:main',
             'follow_gap_blue = rosconfr.follow_gap_blue:main',
+            'dial_nav_blue = rosconfr.dial_nav_blue:main',
         ],
     },
 )

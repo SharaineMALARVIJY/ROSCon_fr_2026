@@ -13,7 +13,7 @@ class PS4TeleopAckermann(Node):
 
         # Topics
         self.declare_parameter('joy_topic', '/joy')
-        self.declare_parameter('cmd_topic', '/yellow_car/cmd_ackermann')
+        self.declare_parameter('cmd_topic', '/blue_car/cmd_ackermann')
 
         # Mapping manette PS4 probable avec joy_node Linux
         # Stick gauche vertical = vitesse
