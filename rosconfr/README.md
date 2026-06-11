@@ -1,6 +1,7 @@
 # Note de Sharaine
 
-J'ai rajouté une voiture bleu avec le follow_the_gap de Amaury
+Il faut changer les path de BT dans nav2_params et le tracks.yaml dans race_params 
+
 
 ### Changer les perfs
 

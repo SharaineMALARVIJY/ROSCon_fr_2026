@@ -108,10 +108,10 @@ def generate_launch_description():
     return LaunchDescription([
         webots,
 
-        yellow_webots_bridge,
+        # yellow_webots_bridge,
         blue_webots_bridge,
 
-        yellow_state_publisher,
+        # yellow_state_publisher,
         blue_state_publisher,
 
         shutdown_on_webots_exit,
