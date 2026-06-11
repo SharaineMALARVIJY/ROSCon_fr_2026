@@ -69,6 +69,7 @@ Et en plus pour la voiture jaune il faut décommenté yellow_webots_bridge et ye
 
 ```bash
 ros2 launch rosconfr webots_rosconfr.launch.py
+ros2 run rosconfr front_scan_filter
 
 ros2 run joy joy_node
 ros2 run rosconfr ps4_teleop_ackermann
@@ -82,7 +83,6 @@ Il faut changer les path de BT dans nav2_params et le tracks.yaml dans race_para
 
 ```bash
 ros2 launch rosconfr webots_rosconfr.launch.py
-
 ros2 run rosconfr front_scan_filter
 
 ros2 launch rosconfr blue_odom.launch.py
