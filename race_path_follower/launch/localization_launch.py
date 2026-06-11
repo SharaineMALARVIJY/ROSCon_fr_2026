@@ -32,8 +32,8 @@ from nav2_common.launch import RewrittenYaml
 def generate_launch_description():
     # Get the launch directory
     bringup_dir = get_package_share_directory('nav2_bringup')
-    package_dir = get_package_share_directory('race_path_follower')
-    default_map_path = os.path.join(package_dir, 'maps', 'Piste_2025a.yaml')
+    race_path_follower_dir = get_package_share_directory('race_path_follower')
+    default_map_path = os.path.join(race_path_follower_dir, 'maps', 'Piste_2025a.yaml')
 
     namespace = LaunchConfiguration('namespace')
     map_yaml_file = LaunchConfiguration('map')
@@ -89,7 +89,7 @@ def generate_launch_description():
 
     declare_params_file_cmd = DeclareLaunchArgument(
         'params_file',
-        default_value=os.path.join(package_dir, 'params', 'nav2_params.yaml'),
+        default_value=os.path.join(race_path_follower_dir, 'params', 'nav2_params.yaml'),
         description='Full path to the ROS2 parameters file to use for all launched nodes',
     )
 
