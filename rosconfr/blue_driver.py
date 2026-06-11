@@ -12,7 +12,6 @@ from tf2_ros import TransformBroadcaster
 
 class BlueDriver:
     def init(self, webots_node, properties):
-        # Valeurs par défaut dès le début : évite les AttributeError si init plante.
         self.__is_active = False
         self.__node = None
         self.__tf_broadcaster = None
@@ -24,15 +23,21 @@ class BlueDriver:
         self.__steering_angle_rad = 0.0
         self.__measured_speed_m_s = 0.0
 
-        self.__wheelbase = 0.257  # m, valeur TT02
+        self.__wheelbase = 0.257
+
         self.__odom_x = 0.0
         self.__odom_y = 0.0
         self.__odom_yaw = 0.0
 
-        self.__imu_orientation = None
-        self.__gyro = None
+        # Le yaw de pose vient toujours de l'IMU.
         self.__imu_yaw_offset = None
-        self.__imu_yaw_sign = 1.0
+
+        # Seule la source de yaw_rate est configurable.
+        # Valeurs possibles :
+        #   - gyro
+        #   - ackermann
+        #   - imu_derivative
+        self.__previous_imu_yaw = None
 
         self.__last_odom_time = None
 
@@ -59,19 +64,10 @@ class BlueDriver:
         self.__rear_left_wheel_sensor.enable(self.__timestep_ms)
         self.__rear_right_wheel_sensor.enable(self.__timestep_ms)
 
-        # Capteurs IMU Webots ajoutés dans TT02_2025a.proto.
-        # Si ces devices n'existent pas, le driver continue avec le modèle Ackermann.
-        try:
-            self.__imu_orientation = self.__robot.getDevice('inertial_unit')
-            self.__imu_orientation.enable(self.__timestep_ms)
-        except Exception:
-            self.__imu_orientation = None
-
-        try:
-            self.__gyro = self.__robot.getDevice('gyro')
-            self.__gyro.enable(self.__timestep_ms)
-        except Exception:
-            self.__gyro = None
+        self.__imu_orientation = self.__robot.getDevice('inertial_unit')
+        self.__gyro = self.__robot.getDevice('gyro')
+        self.__imu_orientation.enable(self.__timestep_ms)
+        self.__gyro.enable(self.__timestep_ms)
 
         # ROS interface
         if not rclpy.ok():
@@ -80,15 +76,34 @@ class BlueDriver:
         self.__node = rclpy.create_node('blue_driver')
         self.__tf_broadcaster = TransformBroadcaster(self.__node)
 
-        if self.__imu_orientation is not None:
-            self.__node.get_logger().info('[blue_driver] InertialUnit OK')
-        else:
-            self.__node.get_logger().warn('[blue_driver] InertialUnit absente : fallback Ackermann')
+        # Paramètres ROS
+        #
+        # Le yaw de /odom est toujours calculé avec l'IMU.
+        #
+        # yaw_rate_source :
+        #   - "gyro"           : yaw_rate depuis Gyro.z
+        #   - "ackermann"      : yaw_rate = v / L * tan(delta)
+        #   - "imu_derivative" : yaw_rate = dérivée du yaw IMU
+        self.__node.declare_parameter('yaw_rate_source', 'ackermann')
 
-        if self.__gyro is not None:
-            self.__node.get_logger().info('[blue_driver] Gyro OK')
-        else:
-            self.__node.get_logger().warn('[blue_driver] Gyro absent')
+        self.__yaw_rate_source = (
+            self.__node.get_parameter('yaw_rate_source')
+            .get_parameter_value()
+            .string_value
+        )
+
+
+        if self.__yaw_rate_source not in ('gyro', 'ackermann', 'imu_derivative'):
+            self.__node.get_logger().warn(
+                f"[blue_driver] yaw_rate_source='{self.__yaw_rate_source}' invalide, "
+                "fallback vers 'gyro'"
+            )
+            self.__yaw_rate_source = 'gyro'
+
+        self.__node.get_logger().info(
+            f"[blue_driver] yaw=imu, "
+            f"yaw_rate_source={self.__yaw_rate_source}, "
+        )
 
         self.__node.create_subscription(
             AckermannDrive,
@@ -118,8 +133,8 @@ class BlueDriver:
         now = self.__node.get_clock().now()
         self.__last_odom_time = now
 
-        self.__robot.setCruisingSpeed(0.0)   # km/h
-        self.__robot.setSteeringAngle(0.0)   # rad
+        self.__robot.setCruisingSpeed(0.0)
+        self.__robot.setSteeringAngle(0.0)
 
         self.__is_active = True
         self.__node.get_logger().info('[blue_driver] Noeud créé')
@@ -129,25 +144,42 @@ class BlueDriver:
         self.__steering_angle_rad = message.steering_angle
 
     def __normalize_angle(self, angle):
-        return math.atan2(math.sin(angle), math.cos(angle))
+        return (angle + math.pi) % (2.0 * math.pi) - math.pi
 
     def __get_imu_yaw(self):
-        if self.__imu_orientation is None:
-            return None
-
-        try:
-            roll, pitch, yaw = self.__imu_orientation.getRollPitchYaw()
-        except Exception:
-            return None
-
-        if not math.isfinite(yaw):
-            return None
+        roll, pitch, yaw = self.__imu_orientation.getRollPitchYaw()
 
         if self.__imu_yaw_offset is None:
             self.__imu_yaw_offset = yaw
 
-        yaw = self.__imu_yaw_sign * (yaw - self.__imu_yaw_offset)
+        yaw = (yaw - self.__imu_yaw_offset)
         return self.__normalize_angle(yaw)
+
+    def __get_gyro_yaw_rate(self):
+        gx, gy, gz = self.__gyro.getValues()
+        return gz
+
+    def __get_ackermann_yaw_rate(self, v):
+        return v / self.__wheelbase * math.tan(self.__steering_angle_rad)
+
+    def __get_imu_derivative_yaw_rate(self, imu_yaw, dt):
+        if self.__previous_imu_yaw is None:
+            self.__previous_imu_yaw = imu_yaw
+            return 0.0
+
+        dyaw = self.__normalize_angle(imu_yaw - self.__previous_imu_yaw)
+        self.__previous_imu_yaw = imu_yaw
+
+        return dyaw / dt
+
+    def __get_yaw_rate(self, imu_yaw, v, dt):
+        if self.__yaw_rate_source == 'ackermann':
+            return self.__get_ackermann_yaw_rate(v)
+
+        if self.__yaw_rate_source == 'imu_derivative':
+            return self.__get_imu_derivative_yaw_rate(imu_yaw, dt)
+
+        return self.__get_gyro_yaw_rate()
 
     def __publish_joint_states(self):
         message = JointState()
@@ -182,19 +214,11 @@ class BlueDriver:
 
         v = self.__measured_speed_m_s
 
-        yaw_rate = 0.0
-        imu_yaw = self.__get_imu_yaw()
+        # Pose : le yaw vient toujours de l'IMU.
+        self.__odom_yaw = self.__get_imu_yaw()
 
-        if imu_yaw is not None:
-            previous_yaw = self.__odom_yaw
-            self.__odom_yaw = imu_yaw
-            dyaw = self.__normalize_angle(self.__odom_yaw - previous_yaw)
-            yaw_rate = dyaw / dt
-        else:
-            # Fallback si l'InertialUnit n'est pas disponible.
-            if abs(self.__wheelbase) > 1e-6:
-                yaw_rate = v / self.__wheelbase * math.tan(self.__steering_angle_rad)
-            self.__odom_yaw = self.__normalize_angle(self.__odom_yaw + yaw_rate * dt)
+        # Twist : seul le yaw_rate est configurable.
+        yaw_rate = self.__get_yaw_rate(self.__odom_yaw, v, dt)
 
         self.__odom_x += v * math.cos(self.__odom_yaw) * dt
         self.__odom_y += v * math.sin(self.__odom_yaw) * dt
@@ -270,7 +294,7 @@ class BlueDriver:
             self._shutdown_ros()
             return
 
-        self.__robot.setCruisingSpeed(self.__vitesse_m_s * 3.6)  # m/s -> km/h
+        self.__robot.setCruisingSpeed(self.__vitesse_m_s * 3.6)
         self.__robot.setSteeringAngle(-self.__steering_angle_rad)
 
         self.__publish_joint_states()
