@@ -13,7 +13,7 @@ class PS4TeleopAckermann(Node):
 
         # Topics
         self.declare_parameter('joy_topic', '/joy')
-        self.declare_parameter('cmd_topic', '/blue_car/cmd_ackermann')
+        self.declare_parameter('cmd_topic', '/yellow_car/cmd_ackermann')
 
         # Mapping manette PS4 probable avec joy_node Linux
         # Stick gauche vertical = vitesse
@@ -25,10 +25,10 @@ class PS4TeleopAckermann(Node):
         self.declare_parameter('button_stop', 1)  # rond souvent = 1
 
         # Limites voiture
-        self.declare_parameter('max_speed', 1.6)
-        self.declare_parameter('max_reverse_speed', 0.8)
+        self.declare_parameter('max_speed', 1.5)
+        self.declare_parameter('max_reverse_speed', 1.0)
         self.declare_parameter('max_steering_angle', 0.28)
-        self.declare_parameter('deadzone', 0.08)
+        self.declare_parameter('deadzone', 0.1)
 
         self.joy_topic = self.get_parameter('joy_topic').value
         self.cmd_topic = self.get_parameter('cmd_topic').value

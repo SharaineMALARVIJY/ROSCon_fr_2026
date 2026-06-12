@@ -84,7 +84,7 @@ class BlueDriver:
         #   - "gyro"           : yaw_rate depuis Gyro.z
         #   - "ackermann"      : yaw_rate = v / L * tan(delta)
         #   - "imu_derivative" : yaw_rate = dérivée du yaw IMU
-        self.__node.declare_parameter('yaw_rate_source', 'ackermann')
+        self.__node.declare_parameter('yaw_rate_source', 'imu_derivative')
 
         self.__yaw_rate_source = (
             self.__node.get_parameter('yaw_rate_source')

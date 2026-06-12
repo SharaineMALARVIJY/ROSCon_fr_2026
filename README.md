@@ -13,6 +13,7 @@ Installer slam toolbox et nav2
 sudo apt update
 sudo apt install ros-jazzy-slam-toolbox
 sudo apt install ros-jazzy-navigation2 ros-jazzy-nav2-bringup
+sudo apt-get install ros-jazzy-vector-pursuit-controller
 ```
 
 ### Changer les perfs
