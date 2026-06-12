@@ -542,13 +542,13 @@ def main() -> None:
     navigator.waitUntilNav2Active()
     logger.info("Nav2 ready")
 
-    logger.info("Waiting for AMCL pose...")
-    if not wait_until_amcl_pose(navigator, amcl_timeout_sec):
-        logger.error("No AMCL pose received. Check /amcl_pose and localization.")
-        navigator.destroy_node()
-        rclpy.shutdown()
-        return
-    logger.info("AMCL pose received")
+    # logger.info("Waiting for AMCL pose...")
+    # if not wait_until_amcl_pose(navigator, amcl_timeout_sec):
+    #     logger.error("No AMCL pose received. Check /amcl_pose and localization.")
+    #     navigator.destroy_node()
+    #     rclpy.shutdown()
+    #     return
+    # logger.info("AMCL pose received")
 
     if wait_keyboard:
         wait_for_keyboard_start()

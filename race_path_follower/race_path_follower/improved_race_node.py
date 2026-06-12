@@ -1,0 +1,458 @@
+import math
+import time as t
+import yaml
+
+import rclpy
+from geometry_msgs.msg import PoseStamped, Quaternion
+from ackermann_msgs.msg import AckermannDrive
+from sensor_msgs.msg import LaserScan
+from nav2_simple_commander.robot_navigator import BasicNavigator, TaskResult
+
+
+def yaw_to_quaternion(yaw: float) -> Quaternion:
+    q = Quaternion()
+    q.x = 0.0
+    q.y = 0.0
+    q.z = math.sin(yaw / 2.0)
+    q.w = math.cos(yaw / 2.0)
+    return q
+
+
+def make_pose(navigator: BasicNavigator, p, frame_id: str = "map") -> PoseStamped:
+    pose = PoseStamped()
+    pose.header.frame_id = frame_id
+    pose.header.stamp = navigator.get_clock().now().to_msg()
+
+    pose.pose.position.x = float(p[0])
+    pose.pose.position.y = float(p[1])
+    pose.pose.position.z = 0.0
+
+    pose.pose.orientation = yaw_to_quaternion(float(p[2]))
+
+    return pose
+
+
+def validate_point(logger, name: str, p) -> bool:
+    if not isinstance(p, (list, tuple)) or len(p) != 3:
+        logger.error(f"{name} must contain exactly 3 values: [x, y, yaw]")
+        return False
+
+    try:
+        float(p[0])
+        float(p[1])
+        float(p[2])
+    except Exception:
+        logger.error(f"{name} values must be numbers: [x, y, yaw]")
+        return False
+
+    return True
+
+
+def load_track_points(tracks_file: str, active_track: str):
+    with open(tracks_file, "r") as f:
+        data = yaml.safe_load(f)
+
+    if data is None:
+        raise ValueError("tracks.yaml est vide.")
+
+    if "tracks" not in data:
+        raise ValueError("tracks.yaml doit contenir une section 'tracks'.")
+
+    if active_track == "":
+        if "active_track" not in data:
+            raise ValueError(
+                "Aucune trajectoire active. "
+                "Ajoute 'active_track' dans tracks.yaml ou dans race_params.yaml."
+            )
+        active_track = data["active_track"]
+
+    if active_track not in data["tracks"]:
+        available_tracks = list(data["tracks"].keys())
+        raise ValueError(
+            f"Trajectoire '{active_track}' introuvable. "
+            f"Trajectoires disponibles : {available_tracks}"
+        )
+
+    track_data = data["tracks"][active_track]
+
+    if "points" not in track_data:
+        raise ValueError(
+            f"La trajectoire '{active_track}' ne contient pas de section 'points'."
+        )
+
+    points = track_data["points"]
+
+    if not isinstance(points, list):
+        raise ValueError(
+            f"Les points de la trajectoire '{active_track}' doivent être une liste."
+        )
+
+    if len(points) < 2:
+        raise ValueError(
+            f"La trajectoire '{active_track}' doit contenir au moins 2 points : "
+            f"p0 + au moins un objectif."
+        )
+
+    return active_track, points
+
+
+def wait_for_keyboard_start() -> None:
+    while True:
+        key = input("Tape 'd' puis Entrée pour démarrer : ").strip().lower()
+        if key == "d":
+            return
+        print("Commande invalide. Tape seulement 'd'.")
+
+
+def wait_for_task_result(navigator: BasicNavigator, logger, lap: int, goal_idx: int):
+    while not navigator.isTaskComplete():
+        # Important: le BasicNavigator est aussi un node ROS.
+        # spin_once permet aussi de recevoir le LaserScan de recovery.
+        rclpy.spin_once(navigator, timeout_sec=0.0)
+        t.sleep(0.025)
+
+    return navigator.getResult()
+
+
+class MinimalLidarRecovery:
+    """
+    Recovery volontairement simple.
+
+    Elle publie quelques commandes Ackermann sur un topic de recovery.
+    Le mux cmd_twist_to_ackermann donne ensuite la priorité à ce topic,
+    puis rend la main à /cmd_twist quand la recovery s'arrête.
+    """
+
+    def __init__(self, navigator: BasicNavigator):
+        self.node = navigator
+        self.logger = navigator.get_logger()
+
+        self.node.declare_parameter("recovery_scan_topic", "/scan")
+        self.node.declare_parameter("recovery_cmd_topic", "/blue_car/cmd_ackermann_recovery")
+        self.node.declare_parameter("recovery_duration", 1.5)
+        self.node.declare_parameter("recovery_rate", 10.0)
+        self.node.declare_parameter("recovery_forward_speed", 0.18)
+        self.node.declare_parameter("recovery_reverse_speed", -0.15)
+        self.node.declare_parameter("recovery_forward_clear_distance", 0.35)
+        self.node.declare_parameter("recovery_max_steering_angle", 0.28)
+        self.node.declare_parameter("recovery_steering_gain", 1.0)
+        self.node.declare_parameter("recovery_front_center_index", -1)
+        self.node.declare_parameter("recovery_invert_lidar_order", False)
+        self.node.declare_parameter("recovery_invert_steering", False)
+
+        self.scan_topic = str(self.node.get_parameter("recovery_scan_topic").value)
+        self.cmd_topic = str(self.node.get_parameter("recovery_cmd_topic").value)
+        self.duration = float(self.node.get_parameter("recovery_duration").value)
+        self.rate = float(self.node.get_parameter("recovery_rate").value)
+        self.forward_speed = float(self.node.get_parameter("recovery_forward_speed").value)
+        self.reverse_speed = float(self.node.get_parameter("recovery_reverse_speed").value)
+        self.forward_clear_distance = float(
+            self.node.get_parameter("recovery_forward_clear_distance").value
+        )
+        self.max_steering = float(
+            self.node.get_parameter("recovery_max_steering_angle").value
+        )
+        self.steering_gain = float(self.node.get_parameter("recovery_steering_gain").value)
+        self.front_center_index = int(
+            self.node.get_parameter("recovery_front_center_index").value
+        )
+        self.invert_lidar_order = bool(
+            self.node.get_parameter("recovery_invert_lidar_order").value
+        )
+        self.invert_steering = bool(
+            self.node.get_parameter("recovery_invert_steering").value
+        )
+
+        self.ranges = None
+        self.cmd_pub = self.node.create_publisher(AckermannDrive, self.cmd_topic, 10)
+        self.scan_sub = self.node.create_subscription(
+            LaserScan,
+            self.scan_topic,
+            self.scan_callback,
+            10,
+        )
+
+        self.logger.info(
+            f"Minimal recovery ready: scan={self.scan_topic}, cmd={self.cmd_topic}"
+        )
+
+    def scan_callback(self, msg: LaserScan) -> None:
+        ranges = []
+        for r in msg.ranges:
+            if math.isnan(r) or math.isinf(r):
+                ranges.append(6.0)
+            elif r <= 0.0:
+                ranges.append(0.0)
+            else:
+                ranges.append(min(float(r), 6.0))
+
+        if self.invert_lidar_order:
+            ranges = list(reversed(ranges))
+
+        n = len(ranges)
+        if n > 0:
+            if self.front_center_index >= 0:
+                # Mode manuel: utilise l'index donné comme direction avant.
+                center = max(0, min(n - 1, self.front_center_index))
+            else:
+                # Mode auto: avec /scan, on utilise les angles LaserScan pour
+                # trouver le rayon le plus proche de 0 rad, donc l'avant.
+                center = 0
+                best_abs_angle = 999.0
+                for i in range(n):
+                    angle = msg.angle_min + i * msg.angle_increment
+                    angle = (angle + math.pi) % (2.0 * math.pi) - math.pi
+                    abs_angle = abs(angle)
+                    if abs_angle < best_abs_angle:
+                        best_abs_angle = abs_angle
+                        center = i
+
+            target = n // 2
+            shift = target - center
+            ranges = ranges[-shift:] + ranges[:-shift] if shift != 0 else ranges
+
+        self.ranges = ranges
+
+    def publish_cmd(self, speed: float, steering: float) -> None:
+        msg = AckermannDrive()
+        msg.speed = float(speed)
+        msg.steering_angle = float(steering)
+        self.cmd_pub.publish(msg)
+
+    def stop(self) -> None:
+        self.publish_cmd(0.0, 0.0)
+
+    def zone_mean(self, values):
+        valid = [v for v in values if v > 0.0]
+        if not valid:
+            return 6.0
+        return sum(valid) / len(valid)
+
+    def zone_min(self, values):
+        valid = [v for v in values if v > 0.0]
+        if not valid:
+            return 6.0
+        return min(valid)
+
+    def compute_cmd(self):
+        if self.ranges is None or len(self.ranges) < 9:
+            return 0.0, 0.0, 0.0, "NO_SCAN"
+
+        n = len(self.ranges)
+        third = n // 3
+        left = self.ranges[:third]
+        front = self.ranges[third:2 * third]
+        right = self.ranges[2 * third:]
+
+        left_m = self.zone_mean(left)
+        right_m = self.zone_mean(right)
+        front_min = self.zone_min(front)
+
+        # Si la droite est plus libre, right_m > left_m => steering négatif.
+        # C'est le même signe que dans dial_nav_blue.
+        steering = -self.steering_gain * (right_m - left_m) / max(0.20, front_min)
+        steering = max(-1.0, min(1.0, steering)) * self.max_steering
+
+        if self.invert_steering:
+            steering = -steering
+
+        if front_min >= self.forward_clear_distance:
+            # Il y a de la place devant: on avance vers le côté le plus libre.
+            return self.forward_speed, steering, front_min, "FORWARD"
+
+        # Devant bloqué: on recule.
+        # En marche arrière on inverse le braquage pour faire pivoter l'avant
+        # vers le côté qui semblait le plus libre.
+        return self.reverse_speed, -steering, front_min, "REVERSE"
+
+    def run(self) -> None:
+        self.logger.warn("Recovery: minimal lidar forward-or-reverse")
+
+        start_wait = t.monotonic()
+        while self.ranges is None and (t.monotonic() - start_wait) < 1.0:
+            rclpy.spin_once(self.node, timeout_sec=0.05)
+
+        if self.ranges is None:
+            self.logger.error("Recovery impossible: aucun LaserScan reçu")
+            self.stop()
+            return
+
+        dt = 1.0 / max(1.0, self.rate)
+        start = t.monotonic()
+
+        while (t.monotonic() - start) < self.duration:
+            rclpy.spin_once(self.node, timeout_sec=0.0)
+
+            speed, steering, front_min, mode = self.compute_cmd()
+            self.publish_cmd(speed, steering)
+            self.logger.info(
+                f"RECOVERY_MIN {mode} front={front_min:.2f} "
+                f"speed={speed:.2f} steering={steering:.2f}",
+                throttle_duration_sec=0.5,
+            )
+            t.sleep(dt)
+
+        self.stop()
+        t.sleep(0.10)
+        self.stop()
+
+
+def run_recovery(recovery: MinimalLidarRecovery) -> None:
+    recovery.run()
+
+
+def main() -> None:
+    rclpy.init()
+
+    navigator = BasicNavigator(node_name="race_node")
+    logger = navigator.get_logger()
+
+    # ========================
+    # Paramètres ROS
+    # ========================
+    navigator.declare_parameter("laps", 1)
+    navigator.declare_parameter("max_retries", 30)
+
+    # Nouveau système propre
+    navigator.declare_parameter("tracks_file", "tracks.yaml")
+    navigator.declare_parameter("active_track", "")
+
+    laps = int(navigator.get_parameter("laps").value)
+    max_retries = int(navigator.get_parameter("max_retries").value)
+
+    tracks_file = str(navigator.get_parameter("tracks_file").value)
+    active_track = str(navigator.get_parameter("active_track").value)
+
+    recovery = MinimalLidarRecovery(navigator)
+
+    # ========================
+    # Chargement des points
+    # ========================
+    try:
+        active_track, points = load_track_points(tracks_file, active_track)
+    except Exception as e:
+        logger.error(f"Erreur chargement trajectoire : {e}")
+        navigator.destroy_node()
+        rclpy.shutdown()
+        return
+
+    p0 = points[0]
+    goal_points_raw = points[1:]
+
+    if not validate_point(logger, "p0", p0):
+        navigator.destroy_node()
+        rclpy.shutdown()
+        return
+
+    goal_points_one_lap = []
+
+    for i, p in enumerate(goal_points_raw, start=1):
+        name = f"p{i}"
+
+        if not validate_point(logger, name, p):
+            navigator.destroy_node()
+            rclpy.shutdown()
+            return
+
+        goal_points_one_lap.append((name, make_pose(navigator, p)))
+
+    if not goal_points_one_lap:
+        logger.error("No active goal points. The track must contain at least p0 and p1.")
+        navigator.destroy_node()
+        rclpy.shutdown()
+        return
+
+    # ========================
+    # Vérification paramètres
+    # ========================
+    if laps < 1:
+        logger.error("laps must be >= 1")
+        navigator.destroy_node()
+        rclpy.shutdown()
+        return
+
+    if max_retries < 1:
+        logger.error("max_retries must be >= 1")
+        navigator.destroy_node()
+        rclpy.shutdown()
+        return
+
+    # ========================
+    # Logs
+    # ========================
+    logger.info(f"Tracks file: {tracks_file}")
+    logger.info(f"Active track: {active_track}")
+    logger.info(f"Initial pose p0: {p0}")
+    logger.info(f"Active goals per lap: {len(goal_points_one_lap)}")
+    logger.info(f"Total goals over all laps: {len(goal_points_one_lap) * laps}")
+    logger.info(f"Max retries per goal: {max_retries}")
+
+    # ========================
+    # Initialisation Nav2
+    # ========================
+    navigator.setInitialPose(make_pose(navigator, p0))
+
+    logger.info("Waiting for Nav2...")
+    navigator.waitUntilNav2Active()
+    logger.info("Nav2 ready")
+
+    wait_for_keyboard_start()
+
+    # ========================
+    # Navigation
+    # ========================
+    for lap in range(1, laps + 1):
+        logger.info(f"Starting lap {lap}/{laps}")
+
+        for goal_idx, (goal_name, goal_pose) in enumerate(goal_points_one_lap, start=1):
+            success = False
+
+            for attempt in range(1, max_retries + 1):
+                logger.info(
+                    f"Lap {lap}: sending {goal_name} "
+                    f"({goal_idx}/{len(goal_points_one_lap)}) "
+                    f"attempt {attempt}/{max_retries}"
+                )
+
+                navigator.goToPose(goal_pose)
+                result = wait_for_task_result(navigator, logger, lap, goal_idx)
+
+                if result == TaskResult.SUCCEEDED:
+                    logger.info(f"Lap {lap}: {goal_name} succeeded")
+                    success = True
+                    break
+
+                if result == TaskResult.CANCELED:
+                    logger.warn(
+                        f"Lap {lap}: {goal_name} canceled "
+                        f"({attempt}/{max_retries})"
+                    )
+
+                elif result == TaskResult.FAILED:
+                    logger.warn(
+                        f"Lap {lap}: {goal_name} failed "
+                        f"({attempt}/{max_retries})"
+                    )
+                    run_recovery(recovery)
+
+                else:
+                    logger.warn(
+                        f"Lap {lap}: {goal_name} unknown result={result} "
+                        f"({attempt}/{max_retries})"
+                    )
+
+            if not success:
+                logger.error(
+                    f"Lap {lap}: {goal_name} reached max retries "
+                    f"({max_retries}), skipping"
+                )
+
+    logger.info("All laps completed.")
+
+    recovery.stop()
+    navigator.destroy_node()
+    rclpy.shutdown()
+
+
+if __name__ == "__main__":
+    main()
