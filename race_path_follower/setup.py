@@ -13,7 +13,7 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         (os.path.join('share', package_name, 'launch'), glob(os.path.join('launch', '*launch.py'))),
-        ('share/' + package_name + '/behavior_tree', glob('behavior_tree/*')),
+        ('share/' + package_name + '/behavior_trees', glob('behavior_trees/*')),
         ('share/' + package_name + '/params', glob('params/*')),
         ('share/' + package_name + '/maps', glob('maps/*')),
     ],

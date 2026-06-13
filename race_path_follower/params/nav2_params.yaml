@@ -4,9 +4,9 @@ amcl:
   ros__parameters:
     random_seed: 0
     # Odometry noise
-    alpha1: 0.3 # rotation -> rotation
+    alpha1: 0.1 # rotation -> rotation
     alpha2: 0.1 # rotation -> translation
-    alpha3: 0.05 # translation -> translation
+    alpha3: 0.1 # translation -> translation
     alpha4: 0.1 # translation -> rotation
     # alpha5: 0.025
 
@@ -68,8 +68,8 @@ bt_navigator:
     default_cancel_timeout: 50
     wait_for_service_timeout: 1000
     introspection_mode: "disabled"
-    default_nav_through_poses_bt_xml: "/home/turtle/ros2_ws/src/race_path_follower/behavior_tree/navigate_through_poses_bt.xml"
-    default_nav_to_pose_bt_xml: "/home/turtle/ros2_ws/src/race_path_follower/behavior_tree/navigate_to_pose_bt.xml"
+    default_nav_through_poses_bt_xml: "$(find-pkg-share race_path_follower)/behavior_trees/navigate_through_poses.xml"
+    default_nav_to_pose_bt_xml: "$(find-pkg-share race_path_follower)/behavior_trees/navigate_to_pose.xml"
     navigators: ["navigate_to_pose", "navigate_through_poses"]
     navigate_to_pose:
       plugin: "nav2_bt_navigator::NavigateToPoseNavigator"
@@ -97,7 +97,7 @@ bt_navigator:
 
 controller_server:
   ros__parameters:
-    controller_frequency: 20.0
+    controller_frequency: 30.0 # changer aussi velocity_smoother frequency
     publish_zero_velocity: false
     search_window: 2.5
     min_x_velocity_threshold: 0.001
@@ -113,14 +113,14 @@ controller_server:
 
     progress_checker:
       plugin: "nav2_controller::PoseProgressChecker"
-      required_movement_radius: 0.2 #m
-      movement_time_allowance: 5.0 #s
+      required_movement_radius: 0.1 #m
+      movement_time_allowance: 1.0 #s
 
     general_goal_checker:
       plugin: "nav2_controller::PositionGoalChecker"
       stateful: false
       xy_goal_tolerance: 1.0 #m
-      path_length_tolerance: 1.0 #m
+      path_length_tolerance: 0.1 #m
 
     PathHandler:
       plugin: "nav2_controller::FeasiblePathHandler"
@@ -138,7 +138,7 @@ controller_server:
       allow_obstacle_checking_beyond_goal: true
 
       # Vitesses limites
-      desired_linear_vel: 1.5          # vitesse de croisière (m/s)
+      desired_linear_vel: 2.0          # vitesse de croisière (m/s)
 
       use_dynamic_window : true
       max_linear_accel: 1.0            # accélération max (m/s²)
@@ -146,7 +146,7 @@ controller_server:
 
       # Lookahead
       use_velocity_scaled_lookahead_dist: true  # lookahead dynamique selon vitesse
-      min_lookahead_dist: 0.15          # lookahead minimum (m)
+      min_lookahead_dist: 0.1          # lookahead minimum (m)
       max_lookahead_dist: 1.5          # lookahead maximum (m)
       lookahead_time: 1.5              # temps lookahead adaptatif (s)
 
@@ -155,7 +155,7 @@ controller_server:
 
       # Régulation de vitesse en courbe
       use_regulated_linear_velocity_scaling: false
-      regulated_linear_scaling_min_radius: 1.5   # rayon en dessous duquel on ralentit
+      regulated_linear_scaling_min_radius: 1.2   # rayon en dessous duquel on ralentit
       regulated_linear_scaling_min_speed: 0.25   # vitesse min en courbe serrée
 
       # Régulation par proximité des obstacles
@@ -221,6 +221,7 @@ controller_server:
 local_costmap:
   local_costmap:
     ros__parameters:
+      publish_frequency: 8.0
       update_frequency: 12.0 # frequence du lidar
       global_frame: odom
       robot_base_frame: base_link
@@ -232,7 +233,8 @@ local_costmap:
       introspection_mode: "disabled"
       # Footprint polygonal (40x20 cm)
       # Format : [[avant_gauche], [avant_droite], [arrière_droite], [arrière_gauche]]
-      footprint: "[[0.20, 0.10], [0.20, -0.10], [-0.20, -0.10], [-0.20, 0.10]]"
+      # footprint: "[[0.20, 0.10], [0.20, -0.10], [-0.20, -0.10], [-0.20, 0.10]]"
+      footprint: "[[0.30, 0.10], [0.30, -0.10], [-0.08, -0.10], [-0.08, 0.10]]"
       plugins: ["obstacle_layer", "range_layer", "inflation_layer"]
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
@@ -270,7 +272,8 @@ global_costmap:
       publish_frequency: 1.0
       global_frame: map
       robot_base_frame: base_link
-      footprint: "[[0.20, 0.10], [0.20, -0.10], [-0.20, -0.10], [-0.20, 0.10]]"
+      footprint: "[[0.30, 0.10], [0.30, -0.10], [-0.08, -0.10], [-0.08, 0.10]]"
+      # footprint: "[[0.20, 0.10], [0.20, -0.10], [-0.20, -0.10], [-0.20, 0.10]]"
       resolution: 0.05
       track_unknown_space: true
       plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
@@ -293,8 +296,8 @@ global_costmap:
           obstacle_min_range: 0.0
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 3.0
-        inflation_radius: 0.30
+        cost_scaling_factor: 2.0
+        inflation_radius: 0.40
       always_send_full_costmap: true
       introspection_mode: "disabled"
 
@@ -311,17 +314,10 @@ planner_server:
     GridBased:
       plugin: "nav2_smac_planner::SmacPlannerHybrid"
 
-      # Résolution angulaire (nombre de bins d'angle discrets)
-      angle_quantization_bins: 72         # 5° par bin
-
-      # Résolution de la carte analytique (hérite de la costmap si 0.0)
-      analytic_expansion_ratio: 3.5
-      analytic_expansion_max_length: 3.0
-      analytic_expansion_max_cost: 200.0
-      analytic_expansion_max_cost_override: false
-
       # Contrainte cinématique Ackermann
       minimum_turning_radius: 0.89        # rayon de braquage minimum (m)
+      reverse_penalty: 2.0
+      non_straight_penalty: 1.2
 
       # Heuristique
       max_iterations: 1000000
@@ -333,34 +329,52 @@ planner_server:
       cost_travel_multiplier: 6.0
       angle_quantization_bins: 72
 
-      # Lissage intégré (post-processing du chemin Hybrid A*)
-      smooth_path: true
-      smoother:
-        max_iterations: 1000
-        w_smooth: 0.3
-        w_data: 0.2
-        tolerance: 1.0e-10
-        do_refinement: true
-        refinement_num: 2
-
       # Tolérance sur l'objectif
       tolerance: 1.0
       allow_unknown: true
       lookup_table_size: 20.0
       debug_visualizations: false
 
+      # Lissage intégré (post-processing du chemin Hybrid A*)
+      smooth_path: true
+      smoother:
+        max_iterations: 1000
+        w_smooth: 0.5
+        w_data: 0.2
+        tolerance: 1.0e-10
+        do_refinement: true
+        refinement_num: 2
 
 
-# smoother_server:
-#   ros__parameters:
-#     smoother_plugins: ["simple_smoother"]
-#     simple_smoother:
-#       plugin: "nav2_smoother::SimpleSmoother"
-#       tolerance: 1.0e-10
-#       max_its: 1000
-#       refinement_num: 2
-#       enforce_path_inversion: true
-#       do_refinement: true
+
+
+smoother_server:
+  ros__parameters:
+    use_sim_time: true
+    smoother_plugins: ["SmoothPath"]
+
+    SmoothPath:
+      plugin: "nav2_constrained_smoother/ConstrainedSmoother"
+
+      reversing_enabled: true
+      minimum_turning_radius: 0.89
+
+      # Plus rapide
+      max_iterations: 35
+      w_cost: 0.015
+
+      # Plus agressif
+      w_smooth: 2000000.0
+      w_curve: 50.0
+      w_dist: 0.0
+
+      # Autorise plus de déformation du chemin
+      path_downsampling_factor: 2
+      path_upsampling_factor: 1
+
+      # Garde le départ et l'arrivée stables
+      keep_start_orientation: true
+      keep_goal_orientation: true
 
 
 
@@ -396,7 +410,7 @@ behavior_server:
 
 velocity_smoother:
   ros__parameters:
-    smoothing_frequency: 20.0
+    smoothing_frequency: 30.0
     scale_velocities: false
     feedback: "OPEN_LOOP"
     max_velocity: [3.0, 0.0, 99.0]
