@@ -50,7 +50,7 @@ class DialNavBlue(Node):
 
         # Navigation
         self.declare_parameter("mode", "3Dials")  # "3Dials" ou "NDials"
-        self.declare_parameter("n_dials", 11)
+        self.declare_parameter("n_dials", 7)
         self.declare_parameter("spaced_dials", True)
         self.declare_parameter("front_dial_ratio", 0.2)
         self.declare_parameter("feature", "median")  # mean, median, min, max
@@ -80,8 +80,8 @@ class DialNavBlue(Node):
         self.max_steering_angle = float(self.get_parameter("max_steering_angle").value)
 
         # Filtrage
-        self.declare_parameter("alpha_speed", 0.4)
-        self.declare_parameter("alpha_steering", 0.4)
+        self.declare_parameter("alpha_speed", 1.0)#0.4)
+        self.declare_parameter("alpha_steering", 1.0)#0.4)
 
         self.alpha_speed = float(self.get_parameter("alpha_speed").value)
         self.alpha_steering = float(self.get_parameter("alpha_steering").value)

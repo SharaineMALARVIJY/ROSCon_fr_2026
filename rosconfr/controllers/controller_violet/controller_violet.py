@@ -97,7 +97,7 @@ while driver.step() != -1:
         angle = 0
         
     if modeAuto:
-        speed = 6  # km/h
+        speed = 5.4  # km/h
         # angle = donnees_lidar[240]-donnees_lidar[120]
         left_indices = range(110, 131)
         right_indices = range(230, 251)
@@ -121,10 +121,8 @@ while driver.step() != -1:
             error = right_dist - left_dist
 
             Kp = 0.35
-            target_angle = Kp * error
+            angle = Kp * error
 
-            alpha = 0.3
-            angle = (1.0 - alpha) * angle + alpha * target_angle
         else:
             # Si le lidar donne des mesures invalides, on évite un coup de volant brutal
             angle = 0.8 * angle

@@ -12,7 +12,7 @@ Viewpoint {
   # orientation 0.10338522328987032 0.9346479856346036 -0.3402126372645224 0.8040879364415331
   # position -6.196454627636387 -0.30815668623836046 3.6053191316701105
   orientation 0 1 0 1.6
-  position 0 0 13.2
+  position 0.0343453 0.755918 13.2
   followType "Mounted Shot"
 }
 TexturedBackground {
@@ -2230,18 +2230,18 @@ Solid {
     }
   }
 }
-# TT02_2025a {
-#   translation -2.86 -2.5 0.04
-#   name "TT02_violette"
-#   controller "controller_violet"
-#   color 0.5 0 0.6
-# }
-# TT02_2025a {
-#   translation -2 -2 0.04
-#   name "yellow_car"
-#   controller "<extern>"
-#   color 0.69 0.7 0.2
-# }
+TT02_2025a {
+  translation -2.86 -2.5 0.04
+  name "TT02_violette"
+  controller "controller_violet"
+  color 0.5 0 0.6
+}
+TT02_2025a {
+  translation -2 -2 0.04
+  name "yellow_car"
+  controller "<extern>"
+  color 0.69 0.7 0.2
+}
 TT02_2025a {
   translation -1 -2 0.04
   name "blue_car"

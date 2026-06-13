@@ -61,6 +61,7 @@ setup(
             'follow_gap_blue = rosconfr.follow_gap_blue:main',
             'dial_nav_blue = rosconfr.dial_nav_blue:main',
             'front_scan_filter = rosconfr.front_scan_filter:main',
+            'simple_reactive_with_recovery_node = rosconfr.simple_reactive_with_recovery_node:main',
         ],
     },
 )
