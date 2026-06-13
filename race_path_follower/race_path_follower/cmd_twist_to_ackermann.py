@@ -11,14 +11,14 @@ from ackermann_msgs.msg import AckermannDrive
 
 class CmdTwistToAckermannMux(Node):
     """
-    Convertisseur + mux de commandes pour blue_car.
+    Convertisseur + mux de commandes pour yellow_car.
 
     Entrées:
       - /cmd_twist : commande normale Nav2 en geometry_msgs/Twist
-      - /blue_car/cmd_ackermann_recovery : commande prioritaire recovery en AckermannDrive
+      - /yellow_car/cmd_ackermann_recovery : commande prioritaire recovery en AckermannDrive
 
     Sortie:
-      - /blue_car/cmd_ackermann : commande finale pour la voiture
+      - /yellow_car/cmd_ackermann : commande finale pour la voiture
 
     Principe:
       - si une commande recovery récente existe, elle est prioritaire ;
@@ -26,11 +26,11 @@ class CmdTwistToAckermannMux(Node):
     """
 
     def __init__(self):
-        super().__init__('cmd_twist_to_ackermann_blue')
+        super().__init__('cmd_twist_to_ackermann')
 
         self.declare_parameter('cmd_twist_topic', '/cmd_twist')
-        self.declare_parameter('recovery_topic', '/blue_car/cmd_ackermann_recovery')
-        self.declare_parameter('output_topic', '/blue_car/cmd_ackermann')
+        self.declare_parameter('recovery_topic', '/yellow_car/cmd_ackermann_recovery')
+        self.declare_parameter('output_topic', '/yellow_car/cmd_ackermann')
         self.declare_parameter('recovery_timeout', 0.30)
 
         self.cmd_twist_topic = str(self.get_parameter('cmd_twist_topic').value)
@@ -58,13 +58,13 @@ class CmdTwistToAckermannMux(Node):
             10,
         )
 
-        self.get_logger().info(
-            'CmdTwistToAckermannMux démarré: '
-            f'nav2={self.cmd_twist_topic}, '
-            f'recovery={self.recovery_topic}, '
-            f'output={self.output_topic}, '
-            f'timeout={self.recovery_timeout:.2f}s'
-        )
+        # self.get_logger().info(
+        #     'CmdTwistToAckermannMux démarré: '
+        #     f'nav2={self.cmd_twist_topic}, '
+        #     f'recovery={self.recovery_topic}, '
+        #     f'output={self.output_topic}, '
+        #     f'timeout={self.recovery_timeout:.2f}s'
+        # )
 
     def recovery_is_active(self):
         if self.last_recovery_time is None:

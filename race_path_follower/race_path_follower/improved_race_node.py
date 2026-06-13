@@ -128,7 +128,7 @@ class MinimalLidarRecovery:
         self.logger = navigator.get_logger()
 
         self.node.declare_parameter("recovery_scan_topic", "/scan")
-        self.node.declare_parameter("recovery_cmd_topic", "/blue_car/cmd_ackermann_recovery")
+        self.node.declare_parameter("recovery_cmd_topic", "/yellow_car/cmd_ackermann_recovery")
         self.node.declare_parameter("recovery_duration", 1.5)
         self.node.declare_parameter("recovery_rate", 10.0)
         self.node.declare_parameter("recovery_forward_speed", 0.18)

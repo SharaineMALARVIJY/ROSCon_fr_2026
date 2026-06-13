@@ -1,0 +1,46 @@
+odometry_node:
+  ros__parameters:
+    yaw_rate_source: "gyro"   # gyro, ackermann, imu_derivative
+
+    speed_topic: "/yellow_car/current_speed"
+    imu_topic: "/yellow_car/imu"
+    cmd_topic: "/yellow_car/cmd_ackermann"
+
+    odom_topic: "/wheel/odom"
+    publish_tf: false  
+
+    # Pour enlever ekf il faut et commenter ekf dans le launch file: 
+    # odom_topic: "/odom"
+    # publish_tf: true  
+
+# Pour l'instant y'a pas de fusion de capteur mais c'est prêt pour la course
+ekf_filter_node:
+  ros__parameters:
+    frequency: 50.0
+    two_d_mode: true
+    publish_tf: true
+
+    map_frame: map
+    odom_frame: odom
+    base_link_frame: base_footprint
+    world_frame: odom
+
+    odom0: /wheel/odom
+    odom0_config: [
+      true,  true,  false,   # x, y, z
+      false, false, false,   # roll, pitch, yaw
+      true,  false, false,   # vx, vy, vz
+      false, false, false,   # vroll, vpitch, vyaw
+      false, false, false    # ax, ay, az
+    ]
+
+    imu0: /yellow_car/imu
+    imu0_config: [
+      false, false, false,   # x, y, z
+      false, false, true,    # roll, pitch, yaw
+      false, false, false,   # vx, vy, vz
+      false, false, true,    # vroll, vpitch, vyaw
+      false, false, false    # ax, ay, az
+    ]
+
+    imu0_remove_gravitational_acceleration: true
