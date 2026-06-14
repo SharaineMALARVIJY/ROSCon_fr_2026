@@ -31,7 +31,7 @@ class CmdTwistToAckermannMux(Node):
         self.declare_parameter('cmd_twist_topic', '/cmd_twist')
         self.declare_parameter('recovery_topic', '/yellow_car/cmd_ackermann_recovery')
         self.declare_parameter('output_topic', '/yellow_car/cmd_ackermann')
-        self.declare_parameter('recovery_timeout', 0.30)
+        self.declare_parameter('recovery_timeout', 0.05)
 
         self.cmd_twist_topic = str(self.get_parameter('cmd_twist_topic').value)
         self.recovery_topic = str(self.get_parameter('recovery_topic').value)

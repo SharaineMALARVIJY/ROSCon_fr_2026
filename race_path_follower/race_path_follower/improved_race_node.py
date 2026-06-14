@@ -129,10 +129,10 @@ class MinimalLidarRecovery:
 
         self.node.declare_parameter("recovery_scan_topic", "/scan")
         self.node.declare_parameter("recovery_cmd_topic", "/yellow_car/cmd_ackermann_recovery")
-        self.node.declare_parameter("recovery_duration", 1.5)
+        self.node.declare_parameter("recovery_duration", 1.0)
         self.node.declare_parameter("recovery_rate", 10.0)
-        self.node.declare_parameter("recovery_forward_speed", 0.18)
-        self.node.declare_parameter("recovery_reverse_speed", -0.15)
+        self.node.declare_parameter("recovery_forward_speed", 0.9)
+        self.node.declare_parameter("recovery_reverse_speed", -0.5)
         self.node.declare_parameter("recovery_forward_clear_distance", 0.35)
         self.node.declare_parameter("recovery_max_steering_angle", 0.28)
         self.node.declare_parameter("recovery_steering_gain", 1.0)
@@ -249,7 +249,6 @@ class MinimalLidarRecovery:
         front_min = self.zone_min(front)
 
         # Si la droite est plus libre, right_m > left_m => steering négatif.
-        # C'est le même signe que dans dial_nav_blue.
         steering = -self.steering_gain * (right_m - left_m) / max(0.20, front_min)
         steering = max(-1.0, min(1.0, steering)) * self.max_steering
 
@@ -292,9 +291,9 @@ class MinimalLidarRecovery:
             )
             t.sleep(dt)
 
-        self.stop()
-        t.sleep(0.10)
-        self.stop()
+        # self.stop()
+        # t.sleep(0.10)
+        # self.stop()
 
 
 def run_recovery(recovery: MinimalLidarRecovery) -> None:

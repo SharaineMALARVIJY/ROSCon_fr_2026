@@ -1,15 +1,14 @@
 odometry_node:
   ros__parameters:
-    yaw_rate_source: "gyro"   # gyro, ackermann, imu_derivative
+    yaw_rate_source: "ackermann"   # gyro, ackermann, imu_derivative
 
     speed_topic: "/yellow_car/current_speed"
     imu_topic: "/yellow_car/imu"
     cmd_topic: "/yellow_car/cmd_ackermann"
 
-    odom_topic: "/wheel/odom"
+    odom_topic: "odom_ackermann"
     publish_tf: false  
 
-    # Pour enlever ekf il faut et commenter ekf dans le launch file: 
     # odom_topic: "/odom"
     # publish_tf: true  
 
@@ -25,7 +24,7 @@ ekf_filter_node:
     base_link_frame: base_footprint
     world_frame: odom
 
-    odom0: /wheel/odom
+    odom0: /odom_ackermann
     odom0_config: [
       true,  true,  false,   # x, y, z
       false, false, false,   # roll, pitch, yaw
