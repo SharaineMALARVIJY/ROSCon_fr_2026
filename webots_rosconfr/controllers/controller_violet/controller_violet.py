@@ -92,7 +92,7 @@ while driver.step() != -1:
         angle = 0
         
     if modeAuto:
-        speed = 3 #km/h
+        speed = 5.4 #km/h
         #l'angle de la direction est la différence entre les mesures des rayons 
         #du lidar à (-99+18*2)=-63° et (-99+81*2)=63°
         angle = donnees_lidar[240]-donnees_lidar[120]
