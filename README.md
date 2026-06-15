@@ -76,6 +76,7 @@ ros2 launch race_path_follower bringup_launch.py map:=/home/turtle/ros2_ws/src/r
 
 ros2 run race_path_follower improved_race_node --ros-args --params-file /home/turtle/ros2_ws/src/race_path_follower/params/race_params.yaml
 
+ros2 launch webots_rosconfr rviz.launch.py
 ```
 
 
