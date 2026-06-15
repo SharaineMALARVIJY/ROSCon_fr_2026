@@ -1,4 +1,7 @@
 # les packages de nav2 peuvent etre activer et desactiver dans le launch file
+/**:
+  ros__parameters:
+    use_sim_time: True
 
 amcl:
   ros__parameters:

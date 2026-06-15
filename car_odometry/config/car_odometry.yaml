@@ -1,3 +1,7 @@
+/**:
+  ros__parameters:
+    use_sim_time: true
+
 odometry_node:
   ros__parameters:
     yaw_rate_source: "ackermann"   # gyro, ackermann, imu_derivative

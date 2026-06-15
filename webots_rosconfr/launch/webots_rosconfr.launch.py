@@ -72,6 +72,7 @@ def generate_launch_description():
 
     webots = WebotsLauncher(
         world=world_path,
+        ros2_supervisor=True,
         mode='realtime',
         gui=True,
     )
@@ -126,6 +127,7 @@ def generate_launch_description():
 
     return LaunchDescription([
         webots,
+        webots._supervisor, # ajoute le topic /clock 
 
         yellow_webots_bridge,
         # blue_webots_bridge,
