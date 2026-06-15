@@ -124,7 +124,7 @@ controller_server:
       plugin: "nav2_controller::PositionGoalChecker"
       stateful: false
       xy_goal_tolerance: 1.0 #m
-      path_length_tolerance: 0.1 #m
+      path_length_tolerance: 2.0 #m # mettre un peu plus grand que le max_lookahead_dist
 
     PathHandler:
       plugin: "nav2_controller::FeasiblePathHandler"

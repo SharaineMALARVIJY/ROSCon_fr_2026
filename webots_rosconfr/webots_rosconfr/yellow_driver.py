@@ -58,7 +58,6 @@ class YellowDriver:
         self.__imu_orientation.enable(self.__timestep_ms)
         self.__gyro.enable(self.__timestep_ms)
 
-        # ROS interface
         package_dir = get_package_share_directory('webots_rosconfr')
         rclpy.init(args=[
             '--ros-args',
@@ -197,7 +196,6 @@ class YellowDriver:
 
     def __publish_current_speed(self):
         message = Float32()
-        # getCurrentSpeed() ne marche pas correctement dans ta simu, donc on publie la vitesse appliquee.
         message.data = self.__applied_speed_m_s + self.__noise(self.__odom_speed_noise_std_m_s)
         self.__current_speed_publisher.publish(message)
 

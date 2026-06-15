@@ -1,13 +1,13 @@
 /**:
   ros__parameters:
     use_sim_time: True
-    cmd_latency_s: 0.050
+    cmd_latency_s: 0.03
 
     # max_accel_m_s2: 1.5
     # max_decel_m_s2: 3.0
 
     # max_steering_rate_rad_s: 2.0
-    # steering_cmd_noise_std_rad: 0.5
+    steering_cmd_noise_std_rad: 0.05
 
     # odom_speed_noise_std_m_s: 0.03
     # gyro_yaw_rate_noise_std_rad_s: 0.02

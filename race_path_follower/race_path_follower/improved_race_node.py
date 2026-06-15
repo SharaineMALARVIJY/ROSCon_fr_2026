@@ -116,11 +116,11 @@ def wait_for_task_result(navigator: BasicNavigator, logger, lap: int, goal_idx: 
     return navigator.getResult()
 
 
-class MinimalLidarRecovery:
+class LidarRecovery:
     """
-    Recovery volontairement simple.
+    Recovery lidar basée sur les angles du LaserScan.
 
-    Elle publie quelques commandes Ackermann sur un topic de recovery.
+    Elle publie des commandes Ackermann sur un topic de recovery.
     Le mux cmd_twist_to_ackermann donne ensuite la priorité à ce topic,
     puis rend la main à /cmd_twist quand la recovery s'arrête.
     """
@@ -141,6 +141,13 @@ class MinimalLidarRecovery:
         self.node.declare_parameter("recovery_front_center_index", -1)
         self.node.declare_parameter("recovery_invert_lidar_order", False)
         self.node.declare_parameter("recovery_invert_steering", False)
+
+        # Convention LaserScan:
+        #   angle 0 rad  = avant
+        #   angle > 0    = gauche
+        #   angle < 0    = droite
+        self.node.declare_parameter("recovery_front_half_angle_deg", 15.0)
+        self.node.declare_parameter("recovery_side_angle_deg", 105.0)
 
         self.scan_topic = str(self.node.get_parameter("recovery_scan_topic").value)
         self.cmd_topic = str(self.node.get_parameter("recovery_cmd_topic").value)
@@ -164,8 +171,14 @@ class MinimalLidarRecovery:
         self.invert_steering = bool(
             self.node.get_parameter("recovery_invert_steering").value
         )
+        self.front_half_angle = math.radians(
+            float(self.node.get_parameter("recovery_front_half_angle_deg").value)
+        )
+        self.side_angle = math.radians(
+            float(self.node.get_parameter("recovery_side_angle_deg").value)
+        )
 
-        self.ranges = None
+        self.scan_points = None
         self.cmd_pub = self.node.create_publisher(AckermannDrive, self.cmd_topic, 10)
         self.scan_sub = self.node.create_subscription(
             LaserScan,
@@ -175,45 +188,43 @@ class MinimalLidarRecovery:
         )
 
         self.logger.info(
-            f"Minimal recovery ready: scan={self.scan_topic}, cmd={self.cmd_topic}"
+            f"Lidar recovery ready: scan={self.scan_topic}, cmd={self.cmd_topic}, "
+            f"front=±{math.degrees(self.front_half_angle):.1f}deg, "
+            f"sides=±{math.degrees(self.side_angle):.1f}deg"
         )
 
+    def normalize_angle(self, angle: float) -> float:
+        return (angle + math.pi) % (2.0 * math.pi) - math.pi
+
+    def clean_range(self, r: float) -> float:
+        if math.isnan(r) or math.isinf(r):
+            return 6.0
+        if r <= 0.0:
+            return 0.0
+        return min(float(r), 6.0)
+
     def scan_callback(self, msg: LaserScan) -> None:
-        ranges = []
-        for r in msg.ranges:
-            if math.isnan(r) or math.isinf(r):
-                ranges.append(6.0)
-            elif r <= 0.0:
-                ranges.append(0.0)
-            else:
-                ranges.append(min(float(r), 6.0))
+        ranges = [self.clean_range(r) for r in msg.ranges]
 
         if self.invert_lidar_order:
             ranges = list(reversed(ranges))
 
         n = len(ranges)
-        if n > 0:
-            if self.front_center_index >= 0:
-                # Mode manuel: utilise l'index donné comme direction avant.
-                center = max(0, min(n - 1, self.front_center_index))
-            else:
-                # Mode auto: avec /scan, on utilise les angles LaserScan pour
-                # trouver le rayon le plus proche de 0 rad, donc l'avant.
-                center = 0
-                best_abs_angle = 999.0
-                for i in range(n):
-                    angle = msg.angle_min + i * msg.angle_increment
-                    angle = (angle + math.pi) % (2.0 * math.pi) - math.pi
-                    abs_angle = abs(angle)
-                    if abs_angle < best_abs_angle:
-                        best_abs_angle = abs_angle
-                        center = i
+        if n == 0:
+            self.scan_points = None
+            return
 
-            target = n // 2
-            shift = target - center
-            ranges = ranges[-shift:] + ranges[:-shift] if shift != 0 else ranges
+        front_angle_offset = 0.0
+        if self.front_center_index >= 0:
+            center = max(0, min(n - 1, self.front_center_index))
+            front_angle_offset = msg.angle_min + center * msg.angle_increment
 
-        self.ranges = ranges
+        points = []
+        for i, r in enumerate(ranges):
+            angle = msg.angle_min + i * msg.angle_increment - front_angle_offset
+            points.append((self.normalize_angle(angle), r))
+
+        self.scan_points = points
 
     def publish_cmd(self, speed: float, steering: float) -> None:
         msg = AckermannDrive()
@@ -236,15 +247,29 @@ class MinimalLidarRecovery:
             return 6.0
         return min(valid)
 
+    def extract_zones(self):
+        left = []
+        front = []
+        right = []
+
+        for angle, distance in self.scan_points:
+            if abs(angle) <= self.front_half_angle:
+                front.append(distance)
+            elif self.front_half_angle < angle <= self.side_angle:
+                left.append(distance)
+            elif -self.side_angle <= angle < -self.front_half_angle:
+                right.append(distance)
+
+        return left, front, right
+
     def compute_cmd(self):
-        if self.ranges is None or len(self.ranges) < 9:
+        if self.scan_points is None or len(self.scan_points) < 9:
             return 0.0, 0.0, 0.0, "NO_SCAN"
 
-        n = len(self.ranges)
-        third = n // 3
-        left = self.ranges[:third]
-        front = self.ranges[third:2 * third]
-        right = self.ranges[2 * third:]
+        left, front, right = self.extract_zones()
+
+        if not front:
+            return 0.0, 0.0, 0.0, "NO_FRONT_ZONE"
 
         left_m = self.zone_mean(left)
         right_m = self.zone_mean(right)
@@ -267,13 +292,13 @@ class MinimalLidarRecovery:
         return self.reverse_speed, -steering, front_min, "REVERSE"
 
     def run(self) -> None:
-        self.logger.warn("Recovery: minimal lidar forward-or-reverse")
+        self.logger.warn("Recovery: lidar forward-or-reverse")
 
         start_wait = t.monotonic()
-        while self.ranges is None and (t.monotonic() - start_wait) < 1.0:
+        while self.scan_points is None and (t.monotonic() - start_wait) < 1.0:
             rclpy.spin_once(self.node, timeout_sec=0.05)
 
-        if self.ranges is None:
+        if self.scan_points is None:
             self.logger.error("Recovery impossible: aucun LaserScan reçu")
             self.stop()
             return
@@ -287,18 +312,13 @@ class MinimalLidarRecovery:
             speed, steering, front_min, mode = self.compute_cmd()
             self.publish_cmd(speed, steering)
             self.logger.info(
-                f"RECOVERY_MIN {mode} front={front_min:.2f} "
+                f"RECOVERY {mode} front={front_min:.2f} "
                 f"speed={speed:.2f} steering={steering:.2f}",
                 throttle_duration_sec=0.5,
             )
             t.sleep(dt)
 
-        # self.stop()
-        # t.sleep(0.10)
-        # self.stop()
-
-
-def run_recovery(recovery: MinimalLidarRecovery) -> None:
+def run_recovery(recovery: LidarRecovery) -> None:
     recovery.run()
 
 
@@ -325,7 +345,7 @@ def main() -> None:
     tracks_file = str(navigator.get_parameter("tracks_file").value)
     active_track = str(navigator.get_parameter("active_track").value)
 
-    recovery = MinimalLidarRecovery(navigator)
+    recovery = LidarRecovery(navigator)
 
     # ========================
     # Chargement des points
