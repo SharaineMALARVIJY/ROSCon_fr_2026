@@ -26,9 +26,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'race_node=race_path_follower.race_node:main',
             'improved_race_node=race_path_follower.improved_race_node:main',
-            'race_node_sliding_path=race_path_follower.race_node_sliding_path:main',
             'cmd_twist_to_ackermann = race_path_follower.cmd_twist_to_ackermann:main',
         ],
     },
