@@ -5,5 +5,3 @@ race_node:
 
     # use_start_for_first_segment=False : le planner prend la pose actuelle du robot via TF sinon il relie les points.
     use_start_for_first_segment: false
-
-    tracks_file: "/home/turtle/ros2_ws/src/race_path_follower/params/tracks.yaml"

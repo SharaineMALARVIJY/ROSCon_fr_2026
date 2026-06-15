@@ -8,6 +8,8 @@ from ackermann_msgs.msg import AckermannDrive
 from sensor_msgs.msg import LaserScan
 from nav2_simple_commander.robot_navigator import BasicNavigator, TaskResult
 
+from ament_index_python.packages import get_package_share_directory
+
 
 def yaw_to_quaternion(yaw: float) -> Quaternion:
     q = Quaternion()
@@ -312,8 +314,9 @@ def main() -> None:
     navigator.declare_parameter("laps", 1)
     navigator.declare_parameter("max_retries", 30)
 
-    # Nouveau système propre
-    navigator.declare_parameter("tracks_file", "tracks.yaml")
+    package_dir = get_package_share_directory('race_path_follower')
+
+    navigator.declare_parameter("tracks_file", package_dir+"/params/tracks.yaml")
     navigator.declare_parameter("active_track", "")
 
     laps = int(navigator.get_parameter("laps").value)

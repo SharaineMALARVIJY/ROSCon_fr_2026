@@ -67,8 +67,6 @@ ros2 launch slam_toolbox online_async_launch.py  slam_params_file:=/home/turtle/
 
 ### Nav2
 
-Il faut changer le path de tracks.yaml dans race_params si vous ếtes pas dans /home/turtle/ros2_ws/src
-
 ```bash
 ros2 launch webots_rosconfr webots_rosconfr.launch.py
 
