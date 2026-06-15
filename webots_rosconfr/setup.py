@@ -31,6 +31,9 @@ data_files.append(('share/' + package_name + '/protos',
 data_files.append(('share/' + package_name + '/controllers/controller_violet',
                    ['controllers/controller_violet/controller_violet.py']))
 data_files.append(('share/' + package_name, ['package.xml']))
+
+data_files.append(('share/' + package_name + '/config',
+                  ['config/yellow_driver_params.yaml']))
 setup(
     name=package_name,
     version='0.0.1',
