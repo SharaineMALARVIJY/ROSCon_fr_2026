@@ -323,7 +323,12 @@ def run_recovery(recovery: LidarRecovery) -> None:
 
 
 def main() -> None:
-    rclpy.init()
+    package_dir = get_package_share_directory('race_path_follower')
+    rclpy.init(args=[
+        '--ros-args',
+        '--params-file',
+        package_dir+'/params/race_params.yaml'
+    ])
 
     navigator = BasicNavigator(node_name="race_node")
     logger = navigator.get_logger()
@@ -333,8 +338,6 @@ def main() -> None:
     # ========================
     navigator.declare_parameter("laps", 1)
     navigator.declare_parameter("max_retries", 30)
-
-    package_dir = get_package_share_directory('race_path_follower')
 
     navigator.declare_parameter("tracks_file", package_dir+"/params/tracks.yaml")
     navigator.declare_parameter("active_track", "")
