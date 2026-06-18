@@ -1,39 +1,48 @@
 import os
+
 import launch
-from launch_ros.actions import Node
 from launch import LaunchDescription
+from launch.actions import RegisterEventHandler, EmitEvent
+from launch.actions import IncludeLaunchDescription
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.event_handlers import OnProcessExit
+
+from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
+
 from webots_ros2_driver.webots_launcher import WebotsLauncher
 from webots_ros2_driver.webots_controller import WebotsController
+# from webots_ros2_driver.ros2_supervisor import Ros2SupervisorLauncher
+
+def make_webots_controller(robot_name, urdf_path, bridge_node_name, params_path=None):
+    parameters = [
+        {
+            'robot_description': urdf_path,
+        },
+    ]
+
+    if params_path is not None:
+        parameters.append(params_path)
+
+    return WebotsController(
+        robot_name=robot_name,
+        parameters=parameters,
+        remappings=[
+            ('__node', bridge_node_name),
+        ],
+        respawn=True,
+    )
 
 
-def generate_launch_description():
-    package_dir = get_package_share_directory('webots_rosconfr')
-    robot_description_path = os.path.join(
-        package_dir, 'resource', 'TT02_jaune_cam.urdf')
-    with open(robot_description_path, 'r') as file:
+def make_robot_state_publisher(robot_name, urdf_path):
+    with open(urdf_path, 'r') as file:
         robot_description = file.read()
 
-    webots = WebotsLauncher(
-        world=os.path.join(package_dir, 'worlds',
-                           'Piste_CoVAPSy_2025a_camera.wbt'),
-        mode='realtime',
-        gui=True
-    )
-
-    webots_bridge = WebotsController(
-        robot_name='yellow_car',  # must match the robot name in world file
-        parameters=[{'robot_description': robot_description_path},],
-        remappings=[
-            ('__node', 'webots_bridge'),  # Change node name
-        ],
-        respawn=True,  # Respawn robot after simulation reset in Webots
-        # respawn_delay=1.0
-    )
-
-    robot_state_publisher = Node(
+    return Node(
         package='robot_state_publisher',
         executable='robot_state_publisher',
+        name=f'{robot_name}_state_publisher',
+        namespace=robot_name,
         parameters=[
             {'robot_description': robot_description},
             {'use_sim_time': True},
@@ -41,21 +50,90 @@ def generate_launch_description():
         output='screen',
     )
 
-    # CoVAPSy_conduite = Node(
-    #     package='monPaquetCoVAPSy',
-    #     executable='CoVAPSy_conduite',
-    # )
+
+def generate_launch_description():
+    package_dir = get_package_share_directory('webots_rosconfr')
+
+    world_path = os.path.join(
+        package_dir, 'worlds', 'Piste_CoVAPSy_2025a_camera.wbt')
+
+    yellow_urdf_path = os.path.join(
+        package_dir, 'resource', 'TT02_jaune_cam.urdf')
+
+    yellow_driver_params_path = os.path.join(
+        package_dir, 'config', 'yellow_driver_params.yaml')
+
+    blue_urdf_path = os.path.join(
+        package_dir, 'resource', 'TT02_bleu.urdf')
+
+    webots = WebotsLauncher(
+        world=world_path,
+        ros2_supervisor=True,
+        mode='realtime',
+        gui=True,
+    )
+
+    yellow_webots_bridge = make_webots_controller(
+        robot_name='yellow_car',
+        urdf_path=yellow_urdf_path,
+        bridge_node_name='yellow_webots_bridge',
+        params_path=yellow_driver_params_path,
+    )
+
+    blue_webots_bridge = make_webots_controller(
+        robot_name='blue_car',
+        urdf_path=blue_urdf_path,
+        bridge_node_name='blue_webots_bridge',
+    )
+
+    yellow_state_publisher = make_robot_state_publisher(
+        robot_name='yellow_car',
+        urdf_path=yellow_urdf_path,
+    )
+
+    blue_state_publisher = make_robot_state_publisher(
+        robot_name='blue_car',
+        urdf_path=blue_urdf_path,
+    )
+
+    car_odometry_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(
+                get_package_share_directory('car_odometry'),
+                'launch',
+                'car_odometry.launch.py'
+            )
+        )
+    )
+
+    front_scan_filter = Node(
+        package='car_rosconfr',
+        executable='front_scan_filter',
+        name='front_scan_filter',
+        output='screen',
+    )
+
+    shutdown_on_webots_exit = RegisterEventHandler(
+        event_handler=OnProcessExit(
+            target_action=webots,
+            on_exit=[
+                EmitEvent(event=launch.events.Shutdown())
+            ],
+        )
+    )
 
     return LaunchDescription([
         webots,
-        webots_bridge,
-        robot_state_publisher,
-        # CoVAPSy_conduite,
-        launch.actions.RegisterEventHandler(
-            event_handler=launch.event_handlers.OnProcessExit(
-                target_action=webots,
-                on_exit=[launch.actions.EmitEvent(
-                    event=launch.events.Shutdown())],
-            )
-        )
+        webots._supervisor, # ajoute le topic /clock 
+
+        yellow_webots_bridge,
+        # blue_webots_bridge,
+
+        yellow_state_publisher,
+        # blue_state_publisher,
+
+        car_odometry_launch,
+        front_scan_filter,
+
+        shutdown_on_webots_exit,
     ])
