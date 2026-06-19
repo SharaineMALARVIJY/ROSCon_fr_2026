@@ -32,11 +32,11 @@ amcl:
     # robot_model_type: "nav2_amcl::DifferentialMotionModel"
 
     set_initial_pose: false
-    initial_pose:
-      x: -1.0
-      y: 0.0
-      z: 0.0
-      yaw: 0.0
+    # initial_pose:
+    #   x: -1.0
+    #   y: 0.0
+    #   z: 0.0
+    #   yaw: 0.0
 
     # TF output
     # tf_broadcast: true
@@ -123,7 +123,7 @@ controller_server:
     general_goal_checker:
       plugin: "nav2_controller::PositionGoalChecker"
       stateful: false
-      xy_goal_tolerance: 1.0 #m
+      xy_goal_tolerance: 2.0 #m
       path_length_tolerance: 2.0 #m # mettre un peu plus grand que le max_lookahead_dist
 
     PathHandler:
@@ -142,7 +142,7 @@ controller_server:
       allow_obstacle_checking_beyond_goal: true
 
       # Vitesses limites
-      desired_linear_vel: 1.6          # vitesse de croisière (m/s)
+      desired_linear_vel: 2.0          # vitesse de croisière (m/s) # changer dans race_params
 
       use_dynamic_window : true
       max_linear_accel: 1.0            # accélération max (m/s²)
@@ -151,11 +151,11 @@ controller_server:
       # Lookahead
       use_velocity_scaled_lookahead_dist: true  # lookahead dynamique selon vitesse
       min_lookahead_dist: 0.1          # lookahead minimum (m)
-      max_lookahead_dist: 0.8          # lookahead maximum (m)
+      max_lookahead_dist: 0.8          # lookahead maximum (m) # changer dans race_params
       lookahead_time: 1.0              # temps lookahead adaptatif (s)
 
       # Régulation de vitesse en courbe
-      use_regulated_linear_velocity_scaling: true
+      use_regulated_linear_velocity_scaling: false
       regulated_linear_scaling_min_radius: 1.2   # rayon en dessous duquel on ralentit
       regulated_linear_scaling_min_speed: 0.5   # vitesse min en courbe serrée
 
@@ -271,7 +271,7 @@ global_costmap:
 planner_server:
   ros__parameters:
     planner_plugins: ["GridBased"]
-    expected_planner_frequency: 2.0 #10.0
+    expected_planner_frequency: 2.0
     allow_partial_planning: true
     costmap_update_timeout: 1.0
     introspection_mode: "disabled"
@@ -371,7 +371,7 @@ behavior_server:
 
 velocity_smoother:
   ros__parameters:
-    smoothing_frequency: 40.0
+    smoothing_frequency: 25.0
     scale_velocities: false
     feedback: "OPEN_LOOP"
     max_velocity: [3.0, 0.0, 99.0]

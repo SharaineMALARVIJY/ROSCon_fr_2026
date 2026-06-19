@@ -3,5 +3,42 @@ race_node:
     laps: 7
     max_retries: 999
 
-    # use_start_for_first_segment=False : le planner prend la pose actuelle du robot via TF sinon il relie les points.
-    use_start_for_first_segment: false
+    # ========================
+    # Curve anticipation
+    # Ralentit avant les virages en regardant /plan devant la voiture.
+    # ========================
+    curve_plan_topic: /plan
+    curve_odom_topic: /odom
+    curve_controller_server: /controller_server
+
+    curve_speed_param_name: FollowPath.desired_linear_vel
+    curve_lookahead_param_name: FollowPath.max_lookahead_dist
+    curve_regulated_min_speed_param_name: FollowPath.regulated_linear_scaling_min_speed
+    curve_change_regulated_min_speed: true
+
+    # Vitesses selon le type de portion detectee dans /plan
+    curve_straight_speed: 2.5
+    curve_normal_turn_speed: 1.4
+    curve_sharp_turn_speed: 1.1
+
+    # Lookahead RPP selon le type de portion detectee
+    curve_straight_max_lookahead_dist: 1.4
+    curve_normal_turn_max_lookahead_dist: 0.9
+    curve_sharp_turn_max_lookahead_dist: 0.7
+
+    # Analyse du /plan
+    # Fenetre analysee devant la voiture : [start, end].
+    # On ignore [0, start] pour ne pas ralentir a cause des petites corrections locales.
+    curve_path_start_distance: 0.5
+    curve_path_end_distance: 2.4
+    curve_path_nearest_search_max_points: 80
+
+    # Seuils de detection de virage sur la portion analysee du /plan
+    # Baisse ces valeurs pour ralentir plus souvent / plus tot.
+    curve_turn_heading_change_deg: 20.0
+    curve_sharp_turn_heading_change_deg: 65.0
+
+    # Anti-spam / stabilisation des changements de mode
+    curve_min_param_update_period: 0.20
+    curve_min_mode_duration: 0.35
+    curve_log_period: 0.50

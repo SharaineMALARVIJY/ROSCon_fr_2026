@@ -3,13 +3,13 @@ import time as t
 import yaml
 
 import rclpy
-from geometry_msgs.msg import PoseStamped, Quaternion
+from geometry_msgs.msg import PoseStamped, Quaternion, Twist
 from ackermann_msgs.msg import AckermannDrive
 from sensor_msgs.msg import LaserScan
 from nav2_simple_commander.robot_navigator import BasicNavigator, TaskResult
 
 from ament_index_python.packages import get_package_share_directory
-
+from race_path_follower.nav2_curve_anticipation import Nav2CurveAnticipation
 
 def yaw_to_quaternion(yaw: float) -> Quaternion:
     q = Quaternion()
@@ -106,11 +106,13 @@ def wait_for_keyboard_start() -> None:
         print("Commande invalide. Tape seulement 'd'.")
 
 
-def wait_for_task_result(navigator: BasicNavigator, logger, lap: int, goal_idx: int):
+def wait_for_task_result(navigator, logger, lap, goal_idx, curve_anticipation=None):
     while not navigator.isTaskComplete():
-        # Important: le BasicNavigator est aussi un node ROS.
-        # spin_once permet aussi de recevoir le LaserScan de recovery.
         rclpy.spin_once(navigator, timeout_sec=0.0)
+
+        if curve_anticipation is not None:
+            curve_anticipation.update()
+
         t.sleep(0.025)
 
     return navigator.getResult()
@@ -142,6 +144,14 @@ class LidarRecovery:
         self.node.declare_parameter("recovery_invert_lidar_order", False)
         self.node.declare_parameter("recovery_invert_steering", False)
 
+        # Topic utilisé uniquement pour détecter que Nav2 est actif.
+        # La commande réelle de la voiture passe par /cmd_twist dans le mux.
+        # Dès que Nav2 republie une commande non nulle ici, la recovery s'arrête.
+        self.node.declare_parameter("nav_cmd_topic", "/cmd_vel_nav")
+        self.node.declare_parameter("nav_cmd_timeout", 0.30)
+        self.node.declare_parameter("nav_cmd_min_linear", 0.01)
+        self.node.declare_parameter("nav_cmd_min_angular", 0.01)
+
         # Convention LaserScan:
         #   angle 0 rad  = avant
         #   angle > 0    = gauche
@@ -171,6 +181,11 @@ class LidarRecovery:
         self.invert_steering = bool(
             self.node.get_parameter("recovery_invert_steering").value
         )
+        self.nav_cmd_topic = str(self.node.get_parameter("nav_cmd_topic").value)
+        self.nav_cmd_timeout = float(self.node.get_parameter("nav_cmd_timeout").value)
+        self.nav_cmd_min_linear = float(self.node.get_parameter("nav_cmd_min_linear").value)
+        self.nav_cmd_min_angular = float(self.node.get_parameter("nav_cmd_min_angular").value)
+        self.last_nav_cmd_time = None
         self.front_half_angle = math.radians(
             float(self.node.get_parameter("recovery_front_half_angle_deg").value)
         )
@@ -187,11 +202,34 @@ class LidarRecovery:
             10,
         )
 
+        self.nav_cmd_sub = self.node.create_subscription(
+            Twist,
+            self.nav_cmd_topic,
+            self.nav_cmd_callback,
+            10,
+        )
+
         self.logger.info(
             f"Lidar recovery ready: scan={self.scan_topic}, cmd={self.cmd_topic}, "
             f"front=±{math.degrees(self.front_half_angle):.1f}deg, "
             f"sides=±{math.degrees(self.side_angle):.1f}deg"
         )
+
+    def reset_nav_cmd_watch(self) -> None:
+        self.last_nav_cmd_time = None
+
+    def nav_cmd_callback(self, msg: Twist) -> None:
+        moving_cmd = (
+            abs(float(msg.linear.x)) > self.nav_cmd_min_linear
+            or abs(float(msg.angular.z)) > self.nav_cmd_min_angular
+        )
+        if moving_cmd:
+            self.last_nav_cmd_time = t.monotonic()
+
+    def nav2_has_fresh_cmd(self) -> bool:
+        if self.last_nav_cmd_time is None:
+            return False
+        return (t.monotonic() - self.last_nav_cmd_time) <= self.nav_cmd_timeout
 
     def normalize_angle(self, angle: float) -> float:
         return (angle + math.pi) % (2.0 * math.pi) - math.pi
@@ -291,7 +329,7 @@ class LidarRecovery:
         # vers le côté qui semblait le plus libre.
         return self.reverse_speed, -steering, front_min, "REVERSE"
 
-    def run(self) -> None:
+    def run(self, stop_on_nav_cmd: bool = True) -> str:
         self.logger.warn("Recovery: lidar forward-or-reverse")
 
         start_wait = t.monotonic()
@@ -301,13 +339,18 @@ class LidarRecovery:
         if self.scan_points is None:
             self.logger.error("Recovery impossible: aucun LaserScan reçu")
             self.stop()
-            return
+            return "NO_SCAN"
 
         dt = 1.0 / max(1.0, self.rate)
         start = t.monotonic()
 
         while (t.monotonic() - start) < self.duration:
             rclpy.spin_once(self.node, timeout_sec=0.0)
+
+            if stop_on_nav_cmd and self.nav2_has_fresh_cmd():
+                self.logger.info("Recovery arrêtée: /cmd_vel_nav actif")
+                self.stop()
+                return "NAV_CMD_ACTIVE"
 
             speed, steering, front_min, mode = self.compute_cmd()
             self.publish_cmd(speed, steering)
@@ -318,8 +361,16 @@ class LidarRecovery:
             )
             t.sleep(dt)
 
-def run_recovery(recovery: LidarRecovery) -> None:
-    recovery.run()
+        self.stop()
+        return "TIMEOUT"
+
+def run_recovery(recovery: LidarRecovery, navigator: BasicNavigator, goal_pose: PoseStamped) -> str:
+    # On relance immédiatement le goal pendant la recovery.
+    # Dès que Nav2 republie une commande sur /cmd_vel_nav, la recovery s'arrête.
+    # La commande utilisée par la voiture reste /cmd_twist via le mux.
+    recovery.reset_nav_cmd_watch()
+    navigator.goToPose(goal_pose)
+    return recovery.run(stop_on_nav_cmd=True)
 
 
 def main() -> None:
@@ -338,6 +389,36 @@ def main() -> None:
     # ========================
     navigator.declare_parameter("laps", 1)
     navigator.declare_parameter("max_retries", 30)
+    # Paramètres curve anticipation: ralentissement anticipé avant les virages
+    navigator.declare_parameter("curve_plan_topic", "/plan")
+    navigator.declare_parameter("curve_odom_topic", "/odom")
+    navigator.declare_parameter("curve_controller_server", "/controller_server")
+
+    navigator.declare_parameter("curve_speed_param_name", "FollowPath.desired_linear_vel")
+    navigator.declare_parameter("curve_lookahead_param_name", "FollowPath.max_lookahead_dist")
+    navigator.declare_parameter("curve_regulated_min_speed_param_name", "FollowPath.regulated_linear_scaling_min_speed")
+    navigator.declare_parameter("curve_change_regulated_min_speed", True)
+
+    navigator.declare_parameter("curve_straight_speed", 2.5)
+    navigator.declare_parameter("curve_normal_turn_speed", 1.6)
+    navigator.declare_parameter("curve_sharp_turn_speed", 1.1)
+
+    navigator.declare_parameter("curve_straight_max_lookahead_dist", 1.2)
+    navigator.declare_parameter("curve_normal_turn_max_lookahead_dist", 0.8)
+    navigator.declare_parameter("curve_sharp_turn_max_lookahead_dist", 0.65)
+
+    # Fenêtre du /plan analysée devant la voiture.
+    # On ignore le début [0, start] pour éviter les petites corrections locales,
+    # puis on analyse seulement [start, end].
+    navigator.declare_parameter("curve_path_start_distance", 0.5)
+    navigator.declare_parameter("curve_path_end_distance", 3.0)
+    navigator.declare_parameter("curve_path_nearest_search_max_points", 80)
+    navigator.declare_parameter("curve_turn_heading_change_deg", 18.0)
+    navigator.declare_parameter("curve_sharp_turn_heading_change_deg", 35.0)
+
+    navigator.declare_parameter("curve_min_param_update_period", 0.20)
+    navigator.declare_parameter("curve_min_mode_duration", 0.35)
+    navigator.declare_parameter("curve_log_period", 0.50)
 
     navigator.declare_parameter("tracks_file", package_dir+"/params/tracks.yaml")
     navigator.declare_parameter("active_track", "")
@@ -348,7 +429,89 @@ def main() -> None:
     tracks_file = str(navigator.get_parameter("tracks_file").value)
     active_track = str(navigator.get_parameter("active_track").value)
 
+    curve_plan_topic = str(navigator.get_parameter("curve_plan_topic").value)
+    curve_odom_topic = str(navigator.get_parameter("curve_odom_topic").value)
+    curve_controller_server = str(navigator.get_parameter("curve_controller_server").value)
+
+    curve_speed_param_name = str(navigator.get_parameter("curve_speed_param_name").value)
+    curve_lookahead_param_name = str(navigator.get_parameter("curve_lookahead_param_name").value)
+    curve_regulated_min_speed_param_name = str(
+        navigator.get_parameter("curve_regulated_min_speed_param_name").value
+    )
+    curve_change_regulated_min_speed = bool(
+        navigator.get_parameter("curve_change_regulated_min_speed").value
+    )
+
+    curve_straight_speed = float(navigator.get_parameter("curve_straight_speed").value)
+    curve_normal_turn_speed = float(navigator.get_parameter("curve_normal_turn_speed").value)
+    curve_sharp_turn_speed = float(navigator.get_parameter("curve_sharp_turn_speed").value)
+
+    curve_straight_max_lookahead_dist = float(
+        navigator.get_parameter("curve_straight_max_lookahead_dist").value
+    )
+    curve_normal_turn_max_lookahead_dist = float(
+        navigator.get_parameter("curve_normal_turn_max_lookahead_dist").value
+    )
+    curve_sharp_turn_max_lookahead_dist = float(
+        navigator.get_parameter("curve_sharp_turn_max_lookahead_dist").value
+    )
+
+    curve_path_start_distance = float(
+        navigator.get_parameter("curve_path_start_distance").value
+    )
+    curve_path_end_distance = float(
+        navigator.get_parameter("curve_path_end_distance").value
+    )
+    curve_path_nearest_search_max_points = int(
+        navigator.get_parameter("curve_path_nearest_search_max_points").value
+    )
+    curve_turn_heading_change_deg = float(
+        navigator.get_parameter("curve_turn_heading_change_deg").value
+    )
+    curve_sharp_turn_heading_change_deg = float(
+        navigator.get_parameter("curve_sharp_turn_heading_change_deg").value
+    )
+
+    curve_min_param_update_period = float(
+        navigator.get_parameter("curve_min_param_update_period").value
+    )
+    curve_min_mode_duration = float(
+        navigator.get_parameter("curve_min_mode_duration").value
+    )
+    curve_log_period = float(navigator.get_parameter("curve_log_period").value)
+
     recovery = LidarRecovery(navigator)
+
+    curve_anticipation = Nav2CurveAnticipation(
+        node=navigator,
+        logger=logger,
+        plan_topic=curve_plan_topic,
+        odom_topic=curve_odom_topic,
+        controller_server=curve_controller_server,
+
+        speed_param_name=curve_speed_param_name,
+        lookahead_param_name=curve_lookahead_param_name,
+        regulated_min_speed_param_name=curve_regulated_min_speed_param_name,
+        change_regulated_min_speed=curve_change_regulated_min_speed,
+
+        straight_speed=curve_straight_speed,
+        normal_turn_speed=curve_normal_turn_speed,
+        sharp_turn_speed=curve_sharp_turn_speed,
+
+        straight_max_lookahead_dist=curve_straight_max_lookahead_dist,
+        normal_turn_max_lookahead_dist=curve_normal_turn_max_lookahead_dist,
+        sharp_turn_max_lookahead_dist=curve_sharp_turn_max_lookahead_dist,
+
+        path_start_distance=curve_path_start_distance,
+        path_end_distance=curve_path_end_distance,
+        path_nearest_search_max_points=curve_path_nearest_search_max_points,
+        turn_heading_change_deg=curve_turn_heading_change_deg,
+        sharp_turn_heading_change_deg=curve_sharp_turn_heading_change_deg,
+
+        min_param_update_period=curve_min_param_update_period,
+        min_mode_duration=curve_min_mode_duration,
+        log_period=curve_log_period,
+    )
 
     # ========================
     # Chargement des points
@@ -440,7 +603,7 @@ def main() -> None:
                 )
 
                 navigator.goToPose(goal_pose)
-                result = wait_for_task_result(navigator, logger, lap, goal_idx)
+                result = wait_for_task_result(navigator, logger, lap, goal_idx, curve_anticipation)
 
                 if result == TaskResult.SUCCEEDED:
                     logger.info(f"Lap {lap}: {goal_name} succeeded")
@@ -458,7 +621,19 @@ def main() -> None:
                         f"Lap {lap}: {goal_name} failed "
                         f"({attempt}/{max_retries})"
                     )
-                    run_recovery(recovery)
+
+                    recovery_status = run_recovery(recovery, navigator, goal_pose)
+                    logger.info(f"Recovery status: {recovery_status}")
+
+                    if recovery_status == "NAV_CMD_ACTIVE":
+                        result_after_recovery = wait_for_task_result(
+                            navigator, logger, lap, goal_idx, curve_anticipation
+                        )
+
+                        if result_after_recovery == TaskResult.SUCCEEDED:
+                            logger.info(f"Lap {lap}: {goal_name} succeeded after recovery")
+                            success = True
+                            break
 
                 else:
                     logger.warn(
