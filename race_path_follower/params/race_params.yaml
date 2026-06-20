@@ -19,7 +19,7 @@ race_node:
     # Vitesses selon le type de portion detectee dans /plan
     curve_straight_speed: 2.5
     curve_normal_turn_speed: 1.4
-    curve_sharp_turn_speed: 1.1
+    curve_sharp_turn_speed: 1.0
 
     # Lookahead RPP selon le type de portion detectee
     curve_straight_max_lookahead_dist: 1.4
@@ -29,14 +29,14 @@ race_node:
     # Analyse du /plan
     # Fenetre analysee devant la voiture : [start, end].
     # On ignore [0, start] pour ne pas ralentir a cause des petites corrections locales.
-    curve_path_start_distance: 0.5
-    curve_path_end_distance: 2.4
-    curve_path_nearest_search_max_points: 80
+    curve_path_start_distance: 0.2
+    curve_path_end_distance: 2.5
+    curve_path_nearest_search_max_points: 100
 
     # Seuils de detection de virage sur la portion analysee du /plan
     # Baisse ces valeurs pour ralentir plus souvent / plus tot.
-    curve_turn_heading_change_deg: 20.0
-    curve_sharp_turn_heading_change_deg: 65.0
+    curve_turn_heading_change_deg: 25.0
+    curve_sharp_turn_heading_change_deg: 45.0
 
     # Anti-spam / stabilisation des changements de mode
     curve_min_param_update_period: 0.20

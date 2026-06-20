@@ -24,7 +24,7 @@ PROTO TT02Wheel [
     centralOuterRadius 0.0130
     rimBeamThickness 0.010
     rimBeamOffset 0.0096
-    contactMaterial "default"
+    contactMaterial "rubber"
     physics Physics {}
     boundingObject TRUE
     logoSlot []

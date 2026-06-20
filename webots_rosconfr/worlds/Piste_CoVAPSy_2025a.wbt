@@ -2235,12 +2235,14 @@ Solid {
 }
 TT02_2025a {
   translation -2.86 -2.5 0.04
+#  rotation 0 0 1 3.14158
   name "TT02_violette"
   controller "controller_violet"
   color 0.5 0 0.6
 }
 TT02_2025a {
   translation -2 -2 0.04
+#  rotation 0 0 1 3.14158
   name "yellow_car"
   controller "<extern>"
   color 0.69 0.7 0.2

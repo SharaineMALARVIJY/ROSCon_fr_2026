@@ -94,7 +94,6 @@ bt_navigator:
       - nav_thru_poses
       - nav_to_pose
       - smoother
-      - wait
 
 
 
@@ -123,8 +122,7 @@ controller_server:
     general_goal_checker:
       plugin: "nav2_controller::PositionGoalChecker"
       stateful: false
-      xy_goal_tolerance: 2.0 #m
-      path_length_tolerance: 2.0 #m # mettre un peu plus grand que le max_lookahead_dist
+      xy_goal_tolerance: 1.5 #m # mettre un peu plus grand que le max_lookahead_dist
 
     PathHandler:
       plugin: "nav2_controller::FeasiblePathHandler"
@@ -175,7 +173,7 @@ controller_server:
       max_allowed_time_to_collision_up_to_carrot: 1.0
 
       # Direction
-      allow_reversing: true
+      allow_reversing: false
 
       # Rotation vers la cible (approach)
       use_rotate_to_heading: false           # DÉSACTIVÉ : Ackermann ne tourne pas sur place
