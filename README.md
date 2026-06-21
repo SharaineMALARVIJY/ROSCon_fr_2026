@@ -1,3 +1,10 @@
+# ROSCon FR 2026
+
+## Architecture ROS2
+
+![image](docs/Architecture_ROS2_rosconfr.drawio.svg)
+
+
 # Note de Sharaine
 
 ### First step dans le docker 
@@ -68,11 +75,13 @@ ros2 launch slam_toolbox online_async_launch.py  slam_params_file:=/home/turtle/
 ### Nav2
 
 ```bash
-ros2 launch webots_rosconfr webots_rosconfr.launch.py
+ros2 launch webots_rosconfr webots_rosconfr_cam.launch.py
 
 ros2 launch race_path_follower bringup_launch.py map:=/home/turtle/ros2_ws/src/race_path_follower/maps/Piste_2025a.yaml
 
 ros2 run race_path_follower improved_race_node
+
+ros2 run race_path_follower color_direction_recovery
 
 ros2 launch webots_rosconfr rviz.launch.py
 ```

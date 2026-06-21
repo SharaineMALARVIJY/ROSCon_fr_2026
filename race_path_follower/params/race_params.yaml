@@ -22,7 +22,7 @@ race_node:
     curve_sharp_turn_speed: 1.0
 
     # Lookahead RPP selon le type de portion detectee
-    curve_straight_max_lookahead_dist: 1.4
+    curve_straight_max_lookahead_dist: 2.0
     curve_normal_turn_max_lookahead_dist: 0.9
     curve_sharp_turn_max_lookahead_dist: 0.7
 

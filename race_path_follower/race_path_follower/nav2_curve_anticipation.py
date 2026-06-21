@@ -461,7 +461,7 @@ class Nav2CurveAnticipation:
                 self.logger.info(
                     f'Curve anticipation: target={target_mode}, mode={mode}, '
                     f'heading_change={math.degrees(heading_change):.1f}deg, '
-                    f'turn_dist={turn_distance:.2f}m, '
-                    f'window={self.path_start_distance:.2f}-{self.path_end_distance:.2f}m, '
-                    f'speed={speed:.2f}, lookahead={lookahead:.2f}'
+                    # f'turn_dist={turn_distance:.2f}m, '
+                    # f'window={self.path_start_distance:.2f}-{self.path_end_distance:.2f}m, '
+                    # f'speed={speed:.2f}, lookahead={lookahead:.2f}'
                 )

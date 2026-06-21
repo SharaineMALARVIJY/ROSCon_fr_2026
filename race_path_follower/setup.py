@@ -28,6 +28,7 @@ setup(
         'console_scripts': [
             'improved_race_node=race_path_follower.improved_race_node:main',
             'cmd_twist_to_ackermann = race_path_follower.cmd_twist_to_ackermann:main',
+            'color_direction_recovery = race_path_follower.color_direction_recovery:main',
         ],
     },
 )
