@@ -34,6 +34,7 @@ setup(
             'dial_nav_blue = ' + package_name + '.dial_nav_blue:main',
             'front_scan_filter = ' + package_name + '.front_scan_filter:main',
             'simple_reactive_with_recovery_node = ' + package_name + '.simple_reactive_with_recovery_node:main',
+            'unified_potential_field_navigator = ' + package_name + '.unified_potential_field_navigator:main',
         ],
     },
 )
