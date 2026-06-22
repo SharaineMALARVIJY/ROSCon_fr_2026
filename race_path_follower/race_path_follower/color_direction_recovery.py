@@ -14,6 +14,7 @@ Default topics for yellow_car / Webots:
   Output cmd:   /yellow_car/cmd_ackermann_direction_recovery
   Output enable:/yellow_car/direction_recovery_enable
   Debug image:  /yellow_car/color_direction_lidar_debug
+                shows the exact camera ROI used by the algorithm by default
 
 Expected convention:
   expected_green_side = "left" means: when the car is in the correct direction,
@@ -27,6 +28,8 @@ Notes:
     forward phase does not undo the reverse phase.
   - As soon as the camera sees GOOD, the car stops immediately and waits for confirmation
     before releasing enable.
+  - enable_debug_image_topic activates/deactivates debug image publication.
+  - debug_show_algorithm_roi_only=True publishes only the part of the image seen by the algorithm.
 """
 
 import math
@@ -80,6 +83,8 @@ class ColorDirectionLidarRecovery(Node):
         self.declare_parameter("cmd_topic", "/yellow_car/cmd_ackermann_direction_recovery")
         self.declare_parameter("enable_topic", "/yellow_car/direction_recovery_enable")
         self.declare_parameter("debug_image_topic", "/yellow_car/color_direction_lidar_debug")
+        self.declare_parameter("enable_debug_image_topic", True)
+        self.declare_parameter("debug_show_algorithm_roi_only", True)
 
         # Direction convention
         self.declare_parameter("expected_green_side", "right")  # left or right
@@ -124,6 +129,10 @@ class ColorDirectionLidarRecovery(Node):
         self.cmd_topic = self.get_parameter("cmd_topic").value
         self.enable_topic = self.get_parameter("enable_topic").value
         self.debug_image_topic = self.get_parameter("debug_image_topic").value
+        self.enable_debug_image_topic = bool(self.get_parameter("enable_debug_image_topic").value)
+        self.debug_show_algorithm_roi_only = bool(
+            self.get_parameter("debug_show_algorithm_roi_only").value
+        )
 
         self.expected_green_side = str(self.get_parameter("expected_green_side").value).lower()
         if self.expected_green_side not in ("left", "right"):
@@ -162,7 +171,7 @@ class ColorDirectionLidarRecovery(Node):
             self.get_parameter("stop_as_soon_as_good_seen").value
         )
 
-        self.publish_debug_image = bool(self.get_parameter("publish_debug_image").value)
+        self.publish_debug_image = bool(self.get_parameter("publish_debug_image").value) and self.enable_debug_image_topic
         self.log_period = float(self.get_parameter("log_period").value)
 
         qos_sensor = QoSProfile(
@@ -306,28 +315,43 @@ class ColorDirectionLidarRecovery(Node):
             state = "GOOD" if green_side == self.expected_green_side else "WRONG"
             confidence = min(0.55, green_area / float(roi_h * roi_w) * 8.0)
 
-        debug = bgr.copy()
-        cv2.line(debug, (w // 2, roi_y0), (w // 2, h - 1), (255, 255, 255), 1)
-        cv2.rectangle(debug, (0, roi_y0), (w - 1, h - 1), (255, 255, 255), 1)
-
-        # Overlay masks lightly.
+        # Image debug:
+        # - debug_show_algorithm_roi_only=True: publie uniquement la zone réellement analysée.
+        # - False: publie l'image complète avec le ROI encadré.
         color_overlay = np.zeros_like(roi)
         color_overlay[green_mask > 0] = (0, 180, 0)
         color_overlay[red_mask > 0] = (0, 0, 180)
-        debug[roi_y0:h, :] = cv2.addWeighted(roi, 0.75, color_overlay, 0.25, 0)
+        roi_debug = cv2.addWeighted(roi, 0.75, color_overlay, 0.25, 0)
+
+        cv2.line(roi_debug, (roi_w // 2, 0), (roi_w // 2, roi_h - 1), (255, 255, 255), 1)
 
         if green_area >= min_area and green_cx is not None:
-            cv2.circle(debug, (int(green_cx), roi_y0 + roi_h // 2), 8, (0, 255, 0), -1)
+            cv2.circle(roi_debug, (int(green_cx), roi_h // 2), 8, (0, 255, 0), -1)
         if red_area >= min_area and red_cx is not None:
-            cv2.circle(debug, (int(red_cx), roi_y0 + roi_h // 2), 8, (0, 0, 255), -1)
+            cv2.circle(roi_debug, (int(red_cx), roi_h // 2), 8, (0, 0, 255), -1)
 
         text = (
-            f"{state}  green={green_side} area={green_area}  "
-            f"red={red_side} area={red_area}  lidar F={self.lidar.front_min:.2f} R={self.lidar.rear_min:.2f}"
+            f"{state} green={green_side} red={red_side} "
+            f"G={green_area} R={red_area}"
         )
-        cv2.putText(debug, text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
-        cv2.putText(debug, f"recovery={self.recovery_active} phase={self.phase}", (10, 58),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
+        cv2.putText(roi_debug, text, (10, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
+        cv2.putText(
+            roi_debug,
+            f"recovery={self.recovery_active} phase={self.phase}",
+            (10, 56),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.55,
+            (255, 255, 255),
+            2,
+        )
+
+        if self.debug_show_algorithm_roi_only:
+            debug = roi_debug
+        else:
+            debug = bgr.copy()
+            cv2.line(debug, (w // 2, roi_y0), (w // 2, h - 1), (255, 255, 255), 1)
+            cv2.rectangle(debug, (0, roi_y0), (w - 1, h - 1), (255, 255, 255), 1)
+            debug[roi_y0:h, :] = roi_debug
 
         return DirectionState(state, green_side, red_side, green_area, red_area, confidence), debug
 
