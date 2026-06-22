@@ -1,3 +1,0 @@
-[console_scripts]
-CoVAPSy_cmdR = monPaquetCoVAPSYR.CoVAPSy_cmdR:main
-CoVAPSy_conduiteR = monPaquetCoVAPSYR.CoVAPSy_conduiteR:main
